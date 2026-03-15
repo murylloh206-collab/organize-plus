@@ -1,0 +1,50 @@
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    __dirname.replace(/\\/g, "/") + "/src/**/*.{ts,tsx}",
+    __dirname.replace(/\\/g, "/") + "/index.html"
+  ],
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        primary: "rgb(var(--primary) / <alpha-value>)",
+        "primary-light": "rgb(var(--primary-light) / <alpha-value>)",
+        "primary-dark": "rgb(var(--primary-dark) / <alpha-value>)",
+        background: "rgb(var(--background) / <alpha-value>)",
+        card: "rgb(var(--card-bg) / <alpha-value>)",
+      },
+      fontFamily: {
+        sans: ["Inter", "sans-serif"],
+      },
+      borderRadius: {
+        DEFAULT: "0.5rem",
+        lg: "0.5rem",
+        xl: "0.75rem",
+        full: "9999px",
+      },
+      animation: {
+        "spin-slow": "spin 3s linear infinite",
+        "pulse-slow": "pulse 3s ease-in-out infinite",
+        "fade-in": "fadeIn 0.3s ease-in-out",
+        "slide-up": "slideUp 0.3s ease-out",
+      },
+      keyframes: {
+        fadeIn: {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+        slideUp: {
+          "0%": { transform: "translateY(10px)", opacity: "0" },
+          "100%": { transform: "translateY(0)", opacity: "1" },
+        },
+      },
+    },
+  },
+  plugins: [],
+};

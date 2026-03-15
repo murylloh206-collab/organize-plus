@@ -1,0 +1,119 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary: 15 59 122; /* #0F3B7A */
+    --primary-light: 26 74 139; /* #1A4A8B */
+    --primary-dark: 10 42 90; /* #0A2A5A */
+    --background: 245 247 250; /* #F5F7FA */
+    --card-bg: 255 255 255; /* #FFFFFF */
+    --text: 30 41 59; /* #1E293B */
+    --text-light: 100 116 139; /* #64748B */
+  }
+
+  .dark {
+    --primary: 37 99 235; /* #2563EB */
+    --primary-light: 59 130 246; /* #3B82F6 */
+    --primary-dark: 29 78 216; /* #1D4ED8 */
+    --background: 15 23 42; /* #0F172A */
+    --card-bg: 30 41 59; /* #1E293B */
+    --text: 241 245 249; /* #F1F5F9 */
+    --text-light: 148 163 184; /* #94A3B8 */
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-sans bg-[var(--background)] text-[var(--text)] transition-colors duration-200;
+  }
+
+  * {
+    border-color: theme('colors.slate.200');
+  }
+  .dark * {
+    border-color: theme('colors.slate.800');
+  }
+}
+
+@layer components {
+  .ms {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    font-size: inherit;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .card {
+    @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-white font-bold px-5 py-2.5 rounded-lg hover:bg-primary-light transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold px-5 py-2.5 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-all;
+  }
+
+  .btn-outline {
+    @apply border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold px-5 py-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all;
+  }
+
+  .input {
+  @apply w-full px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-opacity-30 focus:border-primary transition-all placeholder:text-slate-400;
+}
+
+  .badge-success {
+    @apply inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400;
+  }
+
+  .badge-warning {
+    @apply inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400;
+  }
+
+  .badge-danger {
+    @apply inline-flex px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors font-medium text-sm;
+  }
+
+  .sidebar-link-active {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary font-semibold text-sm;
+  }
+}
+
+/* Material Symbols */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  display: inline-block;
+  user-select: none;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { @apply bg-transparent; }
+::-webkit-scrollbar-thumb { @apply bg-slate-300 dark:bg-slate-700 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-slate-400 dark:bg-slate-600; }
+
+/* Circular progress animation */
+@keyframes progress-circle {
+  from { stroke-dashoffset: 283; }
+}

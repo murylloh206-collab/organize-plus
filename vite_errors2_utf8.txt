@@ -1,0 +1,70 @@
+﻿[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+npx : 
+No linha:1 caractere:1
++ npx vite build --config 
+client/vite.config.ts > 
+vite_errors2.txt 2>&1 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecif 
+   ied: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCom 
+   mandError
+ 
+[1m[33mwarn[39m[22m - The `content` 
+option in your Tailwind CSS 
+configuration is missing or empty.
+[1m[33mwarn[39m[22m - Configure 
+your content sources or your generated 
+CSS will be missing styles.
+[1m[33mwarn[39m[22m - https://tailwi
+ndcss.com/docs/content-configuration
+[32mÔ£ô[39m 51 modules transformed.
+[31mx[39m Build failed in 856ms
+[31merror during build:
+[31m[vite:css] [postcss] C:/projetos/no
+vo-formatura/organizze-plus/client/src/in
+dex.css:1:1: The `bg-background-light` 
+class does not exist. If 
+`bg-background-light` is a custom 
+class, make sure it is defined within a 
+`@layer` directive.[31m
+file: [36mC:/projetos/novo-formatura/or
+ganize-plus/client/src/index.css:1:0[31
+m
+    at Input.error (C:\projetos\novo-for
+matura\organizze-plus\node_modules\postcs
+s\lib\input.js:135:16)
+    at AtRule.error (C:\projetos\novo-fo
+rmatura\organizze-plus\node_modules\postc
+ss\lib\node.js:146:32)
+    at processApply (C:\projetos\novo-fo
+rmatura\organizze-plus\node_modules\tailw
+indcss\lib\lib\expandApplyAtRules.js:380
+:29)
+    at C:\projetos\novo-formatura\organi
+ze-plus\node_modules\tailwindcss\lib\lib
+\expandApplyAtRules.js:551:9
+    at C:\projetos\novo-formatura\organi
+ze-plus\node_modules\tailwindcss\lib\pro
+cessTailwindFeatures.js:55:50
+    at async plugins (C:\projetos\novo-f
+ormatura\organizze-plus\node_modules\tail
+windcss\lib\plugin.js:38:17)
+    at async LazyResult.runAsync (C:\pro
+jetos\novo-formatura\organizze-plus\node_
+modules\postcss\lib\lazy-result.js:293:1
+1)
+    at async compileCSS (file:///C:/proj
+etos/novo-formatura/organizze-plus/node_m
+odules/vite/dist/node/chunks/dep-BK3b2jB
+a.js:36898:21)
+    at async Object.transform (file:///C
+:/projetos/novo-formatura/organizze-plus/
+node_modules/vite/dist/node/chunks/dep-B
+K3b2jBa.js:36171:11)
+    at async transform (file:///C:/proje
+tos/novo-formatura/organizze-plus/node_mo
+dules/rollup/dist/es/shared/node-entry.j
+s:21269:16)[39m

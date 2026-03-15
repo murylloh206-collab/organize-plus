@@ -1,0 +1,173 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', sans-serif;
+    --font-display: 'Playfair Display', serif;
+
+    /* Theme: Navy Blue (#1e3a5f) and Gold (#c6a43f) */
+    --background: 210 20% 98%;
+    --foreground: 214 52% 14%;
+    
+    --card: 0 0% 100%;
+    --card-foreground: 214 52% 14%;
+    --card-border: 214 20% 94%;
+    
+    --popover: 0 0% 100%;
+    --popover-foreground: 214 52% 14%;
+    --popover-border: 214 20% 94%;
+    
+    --primary: 214 52% 24%; /* #1e3a5f - Navy */
+    --primary-foreground: 0 0% 100%;
+    
+    --secondary: 45 54% 51%; /* #c6a43f - Dourado */
+    --secondary-foreground: 214 52% 24%;
+    
+    --muted: 210 20% 96%;
+    --muted-foreground: 214 16% 47%;
+    
+    --accent: 45 54% 51%;
+    --accent-foreground: 214 52% 14%;
+    
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 160 84% 39%;
+    --success-foreground: 0 0% 100%;
+    
+    --border: 214 20% 90%;
+    --input: 214 20% 90%;
+    --ring: 45 54% 51%;
+
+    --sidebar: 214 52% 24%; /* Navy */
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-border: 214 52% 20%;
+    --sidebar-primary: 45 54% 51%; /* Dourado */
+    --sidebar-primary-foreground: 214 52% 24%;
+    --sidebar-accent: 214 40% 32%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-ring: 45 54% 51%;
+
+    --radius: 1rem;
+    
+    --elevate-1: rgba(0,0,0, .03);
+    --elevate-2: rgba(0,0,0, .08);
+  }
+
+  .dark {
+    --background: 214 52% 10%;
+    --foreground: 210 20% 98%;
+    
+    --card: 214 52% 14%;
+    --card-foreground: 210 20% 98%;
+    --card-border: 214 30% 20%;
+    
+    --popover: 214 52% 14%;
+    --popover-foreground: 210 20% 98%;
+    --popover-border: 214 30% 20%;
+    
+    --primary: 45 54% 51%;
+    --primary-foreground: 214 52% 14%;
+    
+    --secondary: 214 30% 24%;
+    --secondary-foreground: 210 20% 98%;
+    
+    --muted: 214 30% 20%;
+    --muted-foreground: 210 20% 70%;
+    
+    --accent: 45 54% 51%;
+    --accent-foreground: 214 52% 14%;
+    
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    
+    --border: 214 30% 20%;
+    --input: 214 30% 20%;
+    --ring: 45 54% 51%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply tracking-tight;
+  }
+
+  .btn-primary {
+    @apply bg-[#c6a43f] text-[#1e3a5f] font-extrabold px-6 py-2.5 rounded-lg 
+           hover:bg-[#b89430] transition-all active:scale-[0.98] shadow-sm hover:shadow;
+  }
+  
+  .btn-secondary {
+    @apply bg-[#1e3a5f] text-white font-bold px-6 py-2.5 rounded-lg 
+           hover:bg-[#16304f] transition-all active:scale-[0.98] shadow-sm hover:shadow;
+  }
+
+  .btn-outline {
+    @apply border-2 border-[#1e3a5f] text-[#1e3a5f] font-bold px-6 py-2.5 rounded-lg 
+           hover:bg-[#1e3a5f]/5 transition-all;
+  }
+
+  .sidebar {
+    @apply bg-sidebar text-sidebar-foreground border-r border-sidebar-border;
+  }
+
+  .sidebar-link-active {
+    @apply bg-sidebar-primary text-sidebar-primary-foreground rounded-md;
+  }
+}
+
+@layer utilities {
+  .hover-elevate {
+    @apply transition-all duration-300;
+  }
+  .hover-elevate:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  }
+  .active-elevate-2:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  }
+  
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-xl;
+  }
+  
+  .dark .glass-panel {
+    @apply bg-slate-900/80 border-slate-700/50;
+  }
+}
+
+/* Adicione no final do index.css */
+.sidebar-link {
+  @apply flex items-center gap-3 px-4 py-3 rounded-lg text-white/80 hover:bg-white/10 hover:text-white transition-all duration-200 text-sm font-medium;
+}
+
+.sidebar-link-active {
+  @apply flex items-center gap-3 px-4 py-3 rounded-lg bg-[#c6a43f] text-[#1e3a5f] font-semibold shadow-sm transition-all duration-200 text-sm;
+}
+/* Para o padrão de fundo */
+.bg-pattern {
+  background-image: radial-gradient(circle at 2px 2px, rgba(255,255,255,0.05) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+/* Esconder scrollbar */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

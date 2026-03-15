@@ -1,0 +1,1 @@
+﻿client/src/pages/aluno/perfil.tsx(38,85): error TS17001: JSX elements cannot have multiple attributes with the same name.
