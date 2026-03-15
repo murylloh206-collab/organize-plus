@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { config } from "dotenv";
 import { pool } from "./db.js";
 import connectPgSimple from "connect-pg-simple";
+import dashboardRouter from "./routes/dashboard.js";
 
 import authRoutes from "./routes/auth.js";
 import alunosRoutes from "./routes/alunos.js";
@@ -61,6 +62,8 @@ app.use("/api/eventos", eventosRoutes);
 app.use("/api/metas", metasRoutes);
 app.use("/api/caixa", caixaRoutes);
 app.use("/api/salas", salasRoutes);
+app.use("/api/dashboard", dashboardRouter);
+
 
 // Health check
 app.get("/api/health", (_, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));

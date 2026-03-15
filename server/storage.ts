@@ -1,7 +1,8 @@
 import { db } from "./db.js";
 import {
   usuarios, salas, chaves, rifas, ticketsRifa,
-  pagamentos, eventos, metas, caixa
+  pagamentos, eventos, metas, caixa,
+  type InsertUsuario
 } from "../shared/schema.js";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { hashSenha } from "./auth.js";
@@ -36,6 +37,22 @@ export async function getAlunosBySala(salaId: number) {
     .orderBy(usuarios.nome);
 }
 
+// ---------- Edit dos alunos ----------
+export async function updateUser(id: number, data: Partial<InsertUsuario>) {
+  const [user] = await db
+    .update(usuarios)
+    .set(data)
+    .where(eq(usuarios.id, id))
+    .returning();
+  return user;
+}
+
+export async function deleteUser(id: number) {
+  await db
+    .delete(usuarios)
+    .where(eq(usuarios.id, id));
+}
+
 // ---------- SALAS ----------
 export async function getSalaById(id: number) {
   const [sala] = await db.select().from(salas).where(eq(salas.id, id)).limit(1);
@@ -67,19 +84,82 @@ export async function getRifasBySala(salaId: number) {
   return db.select().from(rifas).where(eq(rifas.salaId, salaId)).orderBy(desc(rifas.createdAt));
 }
 
+export async function getRifaById(id: number) {
+  const [rifa] = await db.select().from(rifas).where(eq(rifas.id, id)).limit(1);
+  return rifa;
+}
+
 export async function createRifa(data: typeof rifas.$inferInsert) {
-  const [rifa] = await db.insert(rifas).values(data).returning();
+  // Garantir que totalNumeros tenha um valor padrão
+  const dadosCompletos = {
+    ...data,
+    totalNumeros: data.totalNumeros || 200
+  };
+  const [rifa] = await db.insert(rifas).values(dadosCompletos).returning();
   return rifa;
 }
 
 export async function updateRifa(id: number, data: Partial<typeof rifas.$inferInsert>) {
-  const [rifa] = await db.update(rifas).set(data).where(eq(rifas.id, id)).returning();
+  // Remover campos que não existem no schema ou não devem ser atualizados
+  const { updatedAt, createdAt, ...dataLimpa } = data as any;
+  
+  const [rifa] = await db
+    .update(rifas)
+    .set({
+      ...dataLimpa,
+      updatedAt: new Date()
+    })
+    .where(eq(rifas.id, id))
+    .returning();
+  return rifa;
+}
+
+export async function deleteRifa(id: number) {
+  // Primeiro deletar todos os tickets associados
+  await db.delete(ticketsRifa).where(eq(ticketsRifa.rifaId, id));
+  // Depois deletar a rifa
+  await db.delete(rifas).where(eq(rifas.id, id));
+}
+
+export async function marcarRifaComoSorteada(id: number, vencedorId: number, numeroSorteado?: number) {
+  // Preparar dados de atualização
+  const updateData: any = {
+    status: "sorteada",
+    vencedorId,
+    dataSorteio: new Date(),
+    updatedAt: new Date()
+  };
+  
+  // Se tiver número sorteado, adicionar
+  if (numeroSorteado) {
+    updateData.numeroSorteado = numeroSorteado;
+  }
+  
+  const [rifa] = await db
+    .update(rifas)
+    .set(updateData)
+    .where(eq(rifas.id, id))
+    .returning();
   return rifa;
 }
 
 // ---------- TICKETS ----------
 export async function getTicketsByRifa(rifaId: number) {
-  return db.select().from(ticketsRifa).where(eq(ticketsRifa.rifaId, rifaId));
+  const tickets = await db
+    .select({
+      ticket: ticketsRifa,
+      vendedor: { nome: usuarios.nome, email: usuarios.email }
+    })
+    .from(ticketsRifa)
+    .leftJoin(usuarios, eq(ticketsRifa.vendedorId, usuarios.id))
+    .where(eq(ticketsRifa.rifaId, rifaId))
+    .orderBy(ticketsRifa.numero);
+  
+  // Mapear para incluir nome do vendedor
+  return tickets.map(t => ({
+    ...t.ticket,
+    vendedorNome: t.vendedor?.nome
+  }));
 }
 
 export async function getTicketsByVendedor(vendedorId: number) {
@@ -87,13 +167,85 @@ export async function getTicketsByVendedor(vendedorId: number) {
 }
 
 export async function createTicket(data: typeof ticketsRifa.$inferInsert) {
-  const [ticket] = await db.insert(ticketsRifa).values(data).returning();
+  // Verificar se o número já existe para esta rifa
+  const ticketsExistentes = await db
+    .select()
+    .from(ticketsRifa)
+    .where(and(
+      eq(ticketsRifa.rifaId, data.rifaId),
+      eq(ticketsRifa.numero, data.numero)
+    ));
+  
+  if (ticketsExistentes.length > 0) {
+    throw new Error("Número já está ocupado nesta rifa");
+  }
+
+  const [ticket] = await db.insert(ticketsRifa).values({
+    ...data,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }).returning();
   return ticket;
 }
 
-export async function updateTicket(id: number, status: "pago" | "pendente") {
-  const [ticket] = await db.update(ticketsRifa).set({ status }).where(eq(ticketsRifa.id, id)).returning();
+export async function updateTicket(id: number, status: "pago" | "pendente" | "cancelado") {
+  const [ticket] = await db
+    .update(ticketsRifa)
+    .set({ 
+      status, 
+      updatedAt: new Date() 
+    })
+    .where(eq(ticketsRifa.id, id))
+    .returning();
   return ticket;
+}
+
+// NOVA FUNÇÃO: Atualizar dados completos do ticket
+// NOVA FUNÇÃO: Atualizar dados completos do ticket
+export async function updateTicketData(id: number, data: {
+  compradorNome: string;
+  compradorContato: string | null;
+  vendedorId: number;
+  valor: string;
+  status?: "pago" | "pendente" | "cancelado"; // Tipo específico
+}) {
+  const [ticket] = await db
+    .update(ticketsRifa)
+    .set({
+      compradorNome: data.compradorNome,
+      compradorContato: data.compradorContato,
+      vendedorId: data.vendedorId,
+      valor: data.valor,
+      status: data.status || "pendente",
+      updatedAt: new Date()
+    })
+    .where(eq(ticketsRifa.id, id))
+    .returning();
+  return ticket;
+}
+// NOVA FUNÇÃO: Deletar ticket
+export async function deleteTicket(id: number) {
+  await db
+    .delete(ticketsRifa)
+    .where(eq(ticketsRifa.id, id));
+}
+
+// NOVA FUNÇÃO: Buscar alunos da sala
+export async function getAlunos(salaId: number) {
+  return db
+    .select({
+      id: usuarios.id,
+      nome: usuarios.nome,
+      email: usuarios.email,
+      celular: usuarios.celular,
+      avatarUrl: usuarios.avatarUrl
+    })
+    .from(usuarios)
+    .where(and(
+      eq(usuarios.salaId, salaId),
+      eq(usuarios.role, "aluno")
+    ))
+    .orderBy(usuarios.nome);
 }
 
 // ---------- PAGAMENTOS ----------
@@ -123,17 +275,61 @@ export async function updatePagamento(id: number, data: Partial<typeof pagamento
 }
 
 // ---------- EVENTOS ----------
+// ---------- EVENTOS ----------
 export async function getEventosBySala(salaId: number) {
-  return db.select().from(eventos).where(eq(eventos.salaId, salaId)).orderBy(desc(eventos.data));
+  return db.select().from(eventos)
+    .where(eq(eventos.salaId, salaId))
+    .orderBy(desc(eventos.data));
 }
 
-export async function createEvento(data: typeof eventos.$inferInsert) {
-  const [ev] = await db.insert(eventos).values(data).returning();
+export async function createEvento(data: {
+  titulo: string;
+  descricao?: string | null;
+  data: Date;
+  local?: string | null;
+  tipo?: string;
+  status?: "planejado" | "realizado" | "cancelado"; // Tipo específico do enum
+  salaId: number;
+}) {
+  const [ev] = await db.insert(eventos).values({
+    titulo: data.titulo,
+    descricao: data.descricao || null,
+    data: data.data,
+    local: data.local || null,
+    tipo: data.tipo || "evento",
+    status: (data.status || "planejado") as "planejado" | "realizado" | "cancelado", // Cast para o tipo correto
+    salaId: data.salaId,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  }).returning();
   return ev;
 }
 
-export async function updateEvento(id: number, data: Partial<typeof eventos.$inferInsert>) {
-  const [ev] = await db.update(eventos).set(data).where(eq(eventos.id, id)).returning();
+export async function updateEvento(id: number, data: Partial<{
+  titulo: string;
+  descricao: string | null;
+  data: Date;
+  local: string | null;
+  tipo: string;
+  status: "planejado" | "realizado" | "cancelado"; // Tipo específico do enum
+}>) {
+  // Preparar dados para atualização
+  const updateData: any = {};
+  
+  if (data.titulo !== undefined) updateData.titulo = data.titulo;
+  if (data.descricao !== undefined) updateData.descricao = data.descricao;
+  if (data.data !== undefined) updateData.data = data.data;
+  if (data.local !== undefined) updateData.local = data.local;
+  if (data.tipo !== undefined) updateData.tipo = data.tipo;
+  if (data.status !== undefined) updateData.status = data.status;
+  
+  updateData.updatedAt = new Date();
+
+  const [ev] = await db
+    .update(eventos)
+    .set(updateData)
+    .where(eq(eventos.id, id))
+    .returning();
   return ev;
 }
 
