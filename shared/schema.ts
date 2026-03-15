@@ -17,6 +17,7 @@ export const salas = pgTable("salas", {
   codigo: text("codigo").notNull().unique(),
   dataFormatura: timestamp("data_formatura"),
   metaValor: decimal("meta_valor", { precision: 12, scale: 2 }).default("0"),
+  senha: text("senha"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

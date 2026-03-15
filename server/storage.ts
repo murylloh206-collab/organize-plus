@@ -42,11 +42,12 @@ export async function getSalaById(id: number) {
   return sala;
 }
 
-export async function createSala(data: { nome: string; codigo: string; dataFormatura?: string; metaValor?: number }) {
+export async function createSala(data: { nome: string; codigo: string; dataFormatura?: string; metaValor?: number; senha?: string }) {
   const [sala] = await db.insert(salas).values({
     nome: data.nome, codigo: data.codigo,
     dataFormatura: data.dataFormatura ? new Date(data.dataFormatura) : null,
     metaValor: data.metaValor?.toString() ?? "0",
+    senha: data.senha ?? null,
   }).returning();
   return sala;
 }

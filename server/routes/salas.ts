@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { createSala, getSalaById } from "../storage.js";
-import { marcarChaveUsada } from "../storage.js";
 import { db } from "../db.js";
 import { chaves, salas } from "../../shared/schema.js";
 import { eq } from "drizzle-orm";
@@ -33,7 +32,7 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const { nome, codigo, dataFormatura, metaValor } = req.body;
+    const { nome, codigo, dataFormatura, metaValor, senha } = req.body;
 
     if (!nome) {
       return res.status(400).json({ message: "Nome da turma é obrigatório" });
@@ -46,13 +45,11 @@ router.post("/", async (req, res) => {
       codigo: codigoFinal,
       dataFormatura: dataFormatura || undefined,
       metaValor: parseFloat(metaValor) || 0,
+      senha: senha,
     });
 
     // Atualizar salaId na sessão do admin
     req.session.salaId = sala.id;
-
-    // Marcar a chave como usada
-    await marcarChaveUsada(req.session.chaveId, req.session.userId);
 
     // Limpar da sessão após uso
     req.session.chaveValidada = false;

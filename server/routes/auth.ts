@@ -105,21 +105,53 @@ router.post("/register-comissao", async (req, res) => {
 // POST /api/auth/register-aluno
 router.post("/register-aluno", async (req, res) => {
   try {
-    const { nome, email, senha, celular, salaId } = req.body;
-    if (!nome || !email || !senha || !salaId) {
-      return res.status(400).json({ message: "Dados incompletos" });
+    const { nome, email, senha, celular, turmaId, senhaTurma } = req.body;
+    
+    // Validar os campos obrigatórios
+    if (!nome || !email || !senha || !celular || !turmaId || !senhaTurma) {
+      return res.status(400).json({ 
+        message: "Dados incompletos",
+        campos: { nome, email, senha, celular, turmaId, senhaTurma }
+      });
     }
+    
+    // Verificar se a turma existe
+    const sala = await getSalaById(parseInt(turmaId));
+    if (!sala) {
+      return res.status(404).json({ message: "Turma não encontrada" });
+    }
+    
+    // Verificar a senha da turma (caso ela exista)
+    if (sala.senha && sala.senha !== senhaTurma) {
+      return res.status(401).json({ message: "Senha da turma incorreta" });
+    }
+    
+    // Verificar se email já existe
     const existing = await getUserByEmail(email);
-    if (existing) return res.status(400).json({ message: "Email já cadastrado" });
-
-    const user = await createUser({ nome, email, senha, celular, role: "aluno", salaId: parseInt(salaId) });
+    if (existing) {
+      return res.status(400).json({ message: "Email já cadastrado" });
+    }
+    
+    // Criar o usuário
+    const user = await createUser({
+      nome,
+      email,
+      senha,
+      celular,
+      role: "aluno",
+      salaId: parseInt(turmaId)
+    });
+    
+    // Criar sessão local do express
     req.session.userId = user.id;
-    req.session.userRole = user.role;
+    req.session.userRole = "aluno";
     req.session.salaId = user.salaId ?? null;
+    
     const { senhaHash: _, ...userSafe } = user;
-    res.json({ user: userSafe });
+    res.status(201).json({ user: userSafe });
   } catch (e: any) {
-    res.status(400).json({ message: e.message });
+    console.error("Erro no registro de aluno:", e);
+    res.status(500).json({ message: "Erro interno no registro de aluno" });
   }
 });
 
