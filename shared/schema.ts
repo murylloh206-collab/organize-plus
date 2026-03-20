@@ -97,7 +97,8 @@ export const eventos = pgTable("eventos", {
   descricao: text("descricao"),
   data: timestamp("data"),
   local: text("local"),
-  tipo: text("tipo").default("evento").notNull(), // NOVO CAMPO
+  tipo: text("tipo").default("evento").notNull(),
+  googleEventId: text("google_event_id"),
   status: statusEventoEnum("status").default("planejado").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -113,6 +114,28 @@ export const metas = pgTable("metas", {
   valorAtual: decimal("valor_atual", { precision: 12, scale: 2 }).default("0"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ---------- CONTRIBUIÇÕES DE METAS ----------
+export const contribuicoesMeta = pgTable("contribuicoes_meta", {
+  id: serial("id").primaryKey(),
+  metaId: integer("meta_id").references(() => metas.id).notNull(),
+  alunoId: integer("aluno_id").references(() => usuarios.id).notNull(),
+  valor: decimal("valor", { precision: 12, scale: 2 }).notNull(),
+  descricao: text("descricao"),
+  data: timestamp("data").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ---------- HISTÓRICO DE METAS ----------
+export const historicoMeta = pgTable("historico_meta", {
+  id: serial("id").primaryKey(),
+  metaId: integer("meta_id").references(() => metas.id).notNull(),
+  tipo: text("tipo").notNull(), // 'create', 'edit', 'update'
+  descricao: text("descricao").notNull(),
+  usuarioId: integer("usuario_id").references(() => usuarios.id),
+  data: timestamp("data").defaultNow().notNull(),
 });
 
 // ---------- CAIXA ----------

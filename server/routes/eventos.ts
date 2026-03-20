@@ -1,9 +1,16 @@
 import { Router } from "express";
 import { requireAuth, requireAdmin } from "../auth.js";
-import { getEventosBySala, createEvento, updateEvento, deleteEvento } from "../storage.js";
+import { 
+  getEventosBySala, 
+  getEventosProximos, // Nova função
+  createEvento, 
+  updateEvento, 
+  deleteEvento 
+} from "../storage.js";
 
 const router = Router();
 
+// GET /api/eventos - Listar todos os eventos da sala
 router.get("/", requireAuth, async (req, res) => {
   try {
     const salaId = req.session.salaId!;
@@ -15,6 +22,20 @@ router.get("/", requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/eventos/proximos - Listar próximos eventos
+router.get("/proximos", requireAuth, async (req, res) => {
+  try {
+    const salaId = req.session.salaId!;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const result = await getEventosProximos(salaId, limit);
+    res.json(result);
+  } catch (error) {
+    console.error("Erro ao buscar próximos eventos:", error);
+    res.status(500).json({ message: "Erro interno" });
+  }
+});
+
+// POST /api/eventos - Criar novo evento
 router.post("/", requireAdmin, async (req, res) => {
   try {
     const { titulo, descricao, data, local, tipo, status } = req.body;
@@ -23,18 +44,13 @@ router.post("/", requireAdmin, async (req, res) => {
       return res.status(400).json({ message: "Título e data são obrigatórios" });
     }
 
-    // Validar status
-    const statusValido = status === "planejado" || status === "realizado" || status === "cancelado" 
-      ? status 
-      : "planejado";
-
     const eventoData = {
       titulo,
       descricao: descricao || null,
       data: new Date(data),
       local: local || null,
       tipo: tipo || "evento",
-      status: statusValido as "planejado" | "realizado" | "cancelado",
+      status: status || "planejado",
       salaId: req.session.salaId!
     };
 
@@ -46,6 +62,7 @@ router.post("/", requireAdmin, async (req, res) => {
   }
 });
 
+// PUT /api/eventos/:id - Atualizar evento completo
 router.put("/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -59,7 +76,6 @@ router.put("/:id", requireAdmin, async (req, res) => {
     if (local !== undefined) eventoData.local = local;
     if (tipo !== undefined) eventoData.tipo = tipo;
     if (status !== undefined) {
-      // Validar status
       if (status === "planejado" || status === "realizado" || status === "cancelado") {
         eventoData.status = status;
       }
@@ -73,6 +89,7 @@ router.put("/:id", requireAdmin, async (req, res) => {
   }
 });
 
+// PATCH /api/eventos/:id - Atualizar parcialmente
 router.patch("/:id", requireAdmin, async (req, res) => {
   try {
     const ev = await updateEvento(parseInt(req.params.id), req.body);
@@ -83,6 +100,7 @@ router.patch("/:id", requireAdmin, async (req, res) => {
   }
 });
 
+// DELETE /api/eventos/:id - Deletar evento
 router.delete("/:id", requireAdmin, async (req, res) => {
   try {
     await deleteEvento(parseInt(req.params.id));

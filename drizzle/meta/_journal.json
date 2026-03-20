@@ -8,6 +8,20 @@
       "when": 1773883460658,
       "tag": "0000_bitter_molly_hayes",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773972505364,
+      "tag": "0001_ambitious_jean_grey",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773977348028,
+      "tag": "0002_glamorous_wallop",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
@@ -9,11 +9,10 @@ const gerarDiasDoMes = (ano: number, mes: number) => {
   const primeiroDia = new Date(ano, mes, 1);
   const ultimoDia = new Date(ano, mes + 1, 0);
   const diasNoMes = ultimoDia.getDate();
-  const diaSemanaInicio = primeiroDia.getDay(); // 0 = Domingo, 1 = Segunda, etc.
+  const diaSemanaInicio = primeiroDia.getDay();
   
   const dias = [];
   
-  // Dias do mês anterior
   const diasMesAnterior = new Date(ano, mes, 0).getDate();
   for (let i = diaSemanaInicio - 1; i >= 0; i--) {
     dias.push({
@@ -24,7 +23,6 @@ const gerarDiasDoMes = (ano: number, mes: number) => {
     });
   }
   
-  // Dias do mês atual
   for (let i = 1; i <= diasNoMes; i++) {
     dias.push({
       dia: i,
@@ -34,8 +32,7 @@ const gerarDiasDoMes = (ano: number, mes: number) => {
     });
   }
   
-  // Dias do próximo mês para completar a grade
-  const diasRestantes = 42 - dias.length; // 6 linhas * 7 dias = 42
+  const diasRestantes = 42 - dias.length;
   for (let i = 1; i <= diasRestantes; i++) {
     dias.push({
       dia: i,
@@ -114,19 +111,52 @@ const tipoEventoConfig = {
   }
 };
 
+// Função para calcular dias restantes
+const calcularDiasRestantes = (dataLimite?: string) => {
+  if (!dataLimite) return null;
+  
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  
+  const dataFim = new Date(dataLimite);
+  dataFim.setHours(0, 0, 0, 0);
+  
+  const diffTime = dataFim.getTime() - hoje.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  return diffDays;
+};
+
 export default function AdminEventos() {
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
+  const [showMetaModal, setShowMetaModal] = useState(false);
+  const [eventoSelecionado, setEventoSelecionado] = useState<any>(null);
+  const [metaSelecionada, setMetaSelecionada] = useState<any>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [titulo, setTitulo] = useState("");
   const [descricao, setDescricao] = useState("");
   const [data, setData] = useState("");
   const [local, setLocal] = useState("");
   const [tipo, setTipo] = useState<keyof typeof tipoEventoConfig>("evento");
+  const [metaVinculada, setMetaVinculada] = useState<string>("");
+  
+  // Estados para Google Calendar
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [eventoParaSincronizar, setEventoParaSincronizar] = useState<any>(null);
 
+  // Buscar eventos
   const { data: eventos = [] } = useQuery({ 
     queryKey: ["eventos"], 
     queryFn: () => apiRequest("GET", "/eventos") 
+  });
+
+  // Buscar metas
+  const { data: metas = [] } = useQuery({
+    queryKey: ["metas"],
+    queryFn: () => apiRequest("GET", "/metas"),
   });
 
   const criar = useMutation({
@@ -139,12 +169,36 @@ export default function AdminEventos() {
       setData(""); 
       setLocal("");
       setTipo("evento");
+      setMetaVinculada("");
     },
   });
 
   const deletar = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/eventos/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["eventos"] }),
+  });
+
+  const atualizarMeta = useMutation({
+    mutationFn: ({ id, ...data }: any) => apiRequest("PATCH", `/metas/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["metas"] });
+      setShowMetaModal(false);
+    },
+  });
+
+  // Mutation para sincronizar evento com Google Calendar
+  const sincronizarGoogle = useMutation({
+    mutationFn: (eventoId: number) => apiRequest("POST", `/google-calendar/sync-event/${eventoId}`),
+    onSuccess: () => {
+      setSyncStatus('success');
+      setShowSyncModal(false);
+      setTimeout(() => setSyncStatus('idle'), 3000);
+      qc.invalidateQueries({ queryKey: ["eventos"] });
+    },
+    onError: () => {
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+    },
   });
 
   const statusBadge = (s: string) => {
@@ -165,6 +219,69 @@ export default function AdminEventos() {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
   };
 
+  const handleEventoClick = (evento: any) => {
+    setEventoSelecionado(evento);
+    if (evento.tipo === "meta") {
+      const metaRelacionada = metas.find((m: any) => 
+        m.titulo.toLowerCase().includes(evento.titulo.replace("Fim da meta: ", "").toLowerCase()) ||
+        evento.descricao?.toLowerCase().includes(m.titulo.toLowerCase())
+      );
+      setMetaSelecionada(metaRelacionada);
+      setShowMetaModal(true);
+    }
+  };
+
+  const handleAtualizarProgressoMeta = (metaId: number, incremento: number) => {
+    const meta = metas.find((m: any) => m.id === metaId);
+    if (!meta) return;
+
+    const novoValor = (parseFloat(meta.valorAtual) || 0) + incremento;
+    atualizarMeta.mutate({
+      id: metaId,
+      valorAtual: novoValor.toString()
+    });
+  };
+
+  // Função para sincronizar com Google Agenda
+  const handleGoogleSync = async () => {
+    try {
+      setIsSyncing(true);
+      
+      const { url } = await apiRequest("GET", "/google-calendar/auth");
+      
+      const width = 600;
+      const height = 700;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      
+      const popup = window.open(
+        url,
+        'google-auth',
+        `width=${width},height=${height},left=${left},top=${top}`
+      );
+
+      const checkPopup = setInterval(() => {
+        if (popup?.closed) {
+          clearInterval(checkPopup);
+          setIsSyncing(false);
+          if (window.location.search.includes('sync=success')) {
+            setSyncStatus('success');
+            setTimeout(() => setSyncStatus('idle'), 3000);
+          } else if (window.location.search.includes('sync=error')) {
+            setSyncStatus('error');
+            setTimeout(() => setSyncStatus('idle'), 3000);
+          }
+        }
+      }, 500);
+      
+    } catch (error) {
+      console.error("Erro ao sincronizar:", error);
+      setSyncStatus('error');
+      setTimeout(() => setSyncStatus('idle'), 3000);
+      setIsSyncing(false);
+    }
+  };
+
   const diasDoMes = gerarDiasDoMes(currentDate.getFullYear(), currentDate.getMonth());
 
   // Filtrar eventos do dia
@@ -173,10 +290,31 @@ export default function AdminEventos() {
     return eventos.filter((ev: any) => ev.data?.startsWith(dataStr));
   };
 
-  // Próximos eventos (ordenados por data)
-  const proximosEventos = [...eventos]
-    .filter((ev: any) => ev.data && new Date(ev.data) >= new Date())
-    .sort((a: any, b: any) => new Date(a.data).getTime() - new Date(b.data).getTime())
+  // Combinar metas com eventos para próximos compromissos
+  const compromissosProximos = [
+    ...eventos.map((ev: any) => ({
+      ...ev,
+      id: `evento-${ev.id}`,
+      tipoOrigem: 'evento',
+      diasRestantes: calcularDiasRestantes(ev.data)
+    })),
+    ...metas
+      .filter((meta: any) => meta.dataLimite)
+      .map((meta: any) => ({
+        id: `meta-${meta.id}`,
+        titulo: `Fim da meta: ${meta.titulo}`,
+        descricao: meta.descricao,
+        data: meta.dataLimite,
+        tipo: 'meta',
+        local: null,
+        status: 'planejado',
+        tipoOrigem: 'meta',
+        metaId: meta.id,
+        diasRestantes: calcularDiasRestantes(meta.dataLimite)
+      }))
+  ]
+    .filter((item: any) => item.diasRestantes !== null && item.diasRestantes >= 0)
+    .sort((a: any, b: any) => (a.diasRestantes || 0) - (b.diasRestantes || 0))
     .slice(0, 5);
 
   return (
@@ -237,6 +375,18 @@ export default function AdminEventos() {
                         <option key={key} value={key}>{config.label}</option>
                       ))}
                     </select>
+                    {tipo === "meta" && (
+                      <select
+                        className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent col-span-2"
+                        value={metaVinculada}
+                        onChange={e => setMetaVinculada(e.target.value)}
+                      >
+                        <option value="">Vincular a uma meta...</option>
+                        {metas.map((meta: any) => (
+                          <option key={meta.id} value={meta.id}>{meta.titulo}</option>
+                        ))}
+                      </select>
+                    )}
                     <input 
                       className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent col-span-2"
                       placeholder="Descrição" 
@@ -252,6 +402,7 @@ export default function AdminEventos() {
                         local, 
                         data,
                         tipo,
+                        metaId: metaVinculada || undefined,
                         status: "planejado"
                       })} 
                       disabled={criar.isPending} 
@@ -341,6 +492,7 @@ export default function AdminEventos() {
                             return (
                               <div 
                                 key={ev.id}
+                                onClick={() => handleEventoClick(ev)}
                                 className={`text-[10px] p-1 rounded-sm leading-tight font-medium cursor-pointer hover:opacity-80 ${style.bg} ${style.text} ${style.border}`}
                                 title={ev.descricao}
                               >
@@ -369,15 +521,29 @@ export default function AdminEventos() {
                   Próximos Compromissos
                 </h4>
                 <div className="space-y-4">
-                  {proximosEventos.length > 0 ? (
-                    proximosEventos.map((ev: any) => {
-                      const dataEv = new Date(ev.data);
+                  {compromissosProximos.length > 0 ? (
+                    compromissosProximos.map((item: any) => {
+                      const dataEv = new Date(item.data);
                       const mesAbrev = meses[dataEv.getMonth()].substring(0, 3);
-                      const style = getTipoStyle(ev.tipo);
+                      const style = getTipoStyle(item.tipo);
+                      const diasRestantes = item.diasRestantes;
+                      
+                      let statusText = "";
+                      if (diasRestantes === 0) statusText = "Hoje";
+                      else if (diasRestantes === 1) statusText = "Amanhã";
+                      else statusText = `Em ${diasRestantes} dias`;
                       
                       return (
                         <div 
-                          key={ev.id}
+                          key={item.id}
+                          onClick={() => {
+                            if (item.tipoOrigem === 'meta') {
+                              const metaId = item.metaId || item.id.split('-')[1];
+                              window.location.href = `/admin/metas/${metaId}`;
+                            } else {
+                              handleEventoClick(item);
+                            }
+                          }}
                           className="group flex gap-4 p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:border-primary/50 transition-all cursor-pointer shadow-sm relative"
                         >
                           <div className={`flex flex-col items-center justify-center h-14 w-14 rounded-lg shrink-0 transition-colors ${style.bg} ${style.text}`}>
@@ -385,24 +551,45 @@ export default function AdminEventos() {
                             <span className="text-xl font-black">{dataEv.getDate()}</span>
                           </div>
                           <div className="flex-1">
-                            <h5 className="font-bold text-slate-900 dark:text-white">{ev.titulo}</h5>
+                            <h5 className="font-bold text-slate-900 dark:text-white">{item.titulo}</h5>
                             <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
                               <span className="material-symbols-outlined text-sm">{style.icon}</span>
-                              {ev.local || style.label}
+                              {statusText}
                             </p>
                           </div>
-                          <button 
-                            onClick={() => deletar.mutate(ev.id)}
-                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-red-500"
-                          >
-                            <span className="material-symbols-outlined text-sm">close</span>
-                          </button>
+                          <div className="flex items-center gap-1">
+                            {!item.googleEventId && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEventoParaSincronizar(item);
+                                  setShowSyncModal(true);
+                                }}
+                                className="p-1 text-slate-400 hover:text-blue-500 transition-colors"
+                                title="Sincronizar com Google Agenda"
+                              >
+                                <span className="material-symbols-outlined text-sm">event_repeat</span>
+                              </button>
+                            )}
+                            {item.tipoOrigem !== 'meta' && (
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deletar.mutate(item.id.replace('evento-', ''));
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                title="Excluir evento"
+                              >
+                                <span className="material-symbols-outlined text-sm">close</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       );
                     })
                   ) : (
                     <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-8 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700">
-                      Nenhum evento programado
+                      Nenhum compromisso próximo
                     </p>
                   )}
                 </div>
@@ -415,40 +602,174 @@ export default function AdminEventos() {
                     <span className="material-symbols-outlined">stars</span>
                     Metas do Mês
                   </h4>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs font-medium uppercase tracking-wide opacity-90">
-                        <span>Arrecadação</span>
-                        <span>80%</span>
-                      </div>
-                      <div className="h-2 bg-white/20 rounded-full">
-                        <div className="h-full bg-white rounded-full" style={{ width: "80%" }}></div>
-                      </div>
+                  {metas.length > 0 ? (
+                    <div className="space-y-4">
+                      {metas.slice(0, 3).map((meta: any) => {
+                        const valorMeta = parseFloat(meta.valorMeta) || 0;
+                        const valorAtual = parseFloat(meta.valorAtual) || 0;
+                        const percentual = valorMeta > 0 ? (valorAtual / valorMeta) * 100 : 0;
+                        const diasRestantes = calcularDiasRestantes(meta.dataLimite);
+                        
+                        return (
+                          <div 
+                            key={meta.id} 
+                            onClick={() => window.location.href = `/admin/metas/${meta.id}`}
+                            className="space-y-2 cursor-pointer hover:bg-white/5 p-2 rounded-lg transition-colors"
+                          >
+                            <div className="flex justify-between text-xs font-medium uppercase tracking-wide opacity-90">
+                              <span>{meta.titulo}</span>
+                              <span>{percentual.toFixed(0)}%</span>
+                            </div>
+                            <div className="h-2 bg-white/20 rounded-full">
+                              <div 
+                                className="h-full bg-white rounded-full transition-all duration-500" 
+                                style={{ width: `${percentual}%` }}
+                              ></div>
+                            </div>
+                            {meta.dataLimite && (
+                              <p className="text-[10px] opacity-80">
+                                {diasRestantes === 0 ? 'Termina hoje' :
+                                 diasRestantes === 1 ? 'Termina amanhã' :
+                                 diasRestantes && diasRestantes > 0 ? `${diasRestantes} dias restantes` :
+                                 'Prazo encerrado'}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {metas.length > 3 && (
+                        <p className="text-xs opacity-80 text-center mt-2">
+                          +{metas.length - 3} outras metas
+                        </p>
+                      )}
                     </div>
-                    <div className="flex items-start gap-3 bg-white/10 p-3 rounded-lg border border-white/20 backdrop-blur-sm">
-                      <span className="material-symbols-outlined text-amber-300">workspace_premium</span>
-                      <div>
-                        <p className="text-sm font-bold">Meta Alcançada!</p>
-                        <p className="text-xs opacity-90">50% do valor total arrecadado atingido em 15/01.</p>
-                      </div>
-                    </div>
-                  </div>
+                  ) : (
+                    <p className="text-sm opacity-90">Nenhuma meta definida</p>
+                  )}
                 </div>
                 {/* Decorator circle */}
                 <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>
               </div>
 
-              {/* Quick Action */}
-              <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-6 text-center group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 mb-2 block">event_repeat</span>
-                <p className="text-sm font-medium text-slate-600 dark:text-slate-400 group-hover:text-primary transition-colors">
-                  Sincronizar com Google Agenda
-                </p>
+              {/* Quick Action - Google Calendar */}
+              <div className="rounded-xl border border-dashed border-slate-300 dark:border-slate-600 p-6 text-center group cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors relative">
+                {syncStatus === 'success' && (
+                  <div className="absolute inset-0 bg-emerald-500/10 rounded-xl flex items-center justify-center animate-fadeIn">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">✓ Sincronizado!</span>
+                  </div>
+                )}
+                {syncStatus === 'error' && (
+                  <div className="absolute inset-0 bg-rose-500/10 rounded-xl flex items-center justify-center animate-fadeIn">
+                    <span className="text-rose-600 dark:text-rose-400 font-medium">✗ Erro ao sincronizar</span>
+                  </div>
+                )}
+                <button
+                  onClick={handleGoogleSync}
+                  disabled={isSyncing}
+                  className="w-full h-full flex flex-col items-center justify-center disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 mb-2 block">
+                    {isSyncing ? 'sync' : 'event_repeat'}
+                  </span>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400 group-hover:text-primary transition-colors">
+                    {isSyncing ? 'Sincronizando...' : 'Sincronizar com Google Agenda'}
+                  </p>
+                </button>
               </div>
             </div>
           </div>
         </div>
       </main>
+
+      {/* Modal de Detalhes da Meta */}
+      {showMetaModal && metaSelecionada && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="text-xl font-bold text-slate-900 dark:text-white">{metaSelecionada.titulo}</h4>
+              <button onClick={() => setShowMetaModal(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <p className="text-sm text-slate-600 dark:text-slate-400">{metaSelecionada.descricao}</p>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Progresso</span>
+                  <span className="font-bold">
+                    R$ {parseFloat(metaSelecionada.valorAtual || "0").toFixed(2)} / R$ {parseFloat(metaSelecionada.valorMeta || "0").toFixed(2)}
+                  </span>
+                </div>
+                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                    style={{ 
+                      width: `${(parseFloat(metaSelecionada.valorAtual || "0") / parseFloat(metaSelecionada.valorMeta || "1")) * 100}%` 
+                    }}
+                  ></div>
+                </div>
+                {metaSelecionada.dataLimite && (
+                  <p className="text-xs text-slate-500 mt-2">
+                    <span className="material-symbols-outlined text-xs align-middle">event</span>
+                    {' '}Data limite: {new Date(metaSelecionada.dataLimite).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+
+              {eventoSelecionado && eventoSelecionado.status !== "realizado" && (
+                <button
+                  onClick={() => {
+                    handleAtualizarProgressoMeta(metaSelecionada.id, 100);
+                    setShowMetaModal(false);
+                  }}
+                  className="w-full mt-4 bg-primary hover:bg-primary/90 text-white py-2.5 rounded-lg text-sm font-semibold transition-all"
+                >
+                  Marcar Evento como Realizado
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Sincronização */}
+      {showSyncModal && eventoParaSincronizar && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h4 className="text-xl font-bold text-slate-900 dark:text-white">Sincronizar com Google Agenda</h4>
+              <button onClick={() => setShowSyncModal(false)} className="text-slate-400 hover:text-slate-600">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            
+            <p className="text-slate-600 dark:text-slate-400 mb-4">
+              Deseja sincronizar o evento <strong>{eventoParaSincronizar.titulo}</strong> com sua agenda do Google?
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  const eventoId = eventoParaSincronizar.id.replace('evento-', '');
+                  sincronizarGoogle.mutate(parseInt(eventoId));
+                }}
+                disabled={sincronizarGoogle.isPending}
+                className="flex-1 bg-primary hover:bg-primary/90 text-white py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
+              >
+                {sincronizarGoogle.isPending ? "Sincronizando..." : "Sincronizar"}
+              </button>
+              <button
+                onClick={() => setShowSyncModal(false)}
+                className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-lg text-sm font-semibold transition-all"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

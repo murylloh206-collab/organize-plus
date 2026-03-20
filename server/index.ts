@@ -16,6 +16,7 @@ import eventosRoutes from "./routes/eventos.js";
 import metasRoutes from "./routes/metas.js";
 import caixaRoutes from "./routes/caixa.js";
 import salasRoutes from "./routes/salas.js";
+import googleCalendarRoutes from "./routes/googleCalendar.js";
 
 config();
 
@@ -63,6 +64,7 @@ app.use("/api/metas", metasRoutes);
 app.use("/api/caixa", caixaRoutes);
 app.use("/api/salas", salasRoutes);
 app.use("/api/dashboard", dashboardRouter);
+app.use("/api/google-calendar", googleCalendarRoutes);
 
 
 // Health check

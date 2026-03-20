@@ -6,6 +6,7 @@ import {
 } from "../shared/schema.js";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { hashSenha } from "./auth.js";
+import { contribuicoesMeta, historicoMeta } from "../shared/schema.js";
 
 // ---------- USUARIOS ----------
 export async function getUserById(id: number) {
@@ -275,7 +276,6 @@ export async function updatePagamento(id: number, data: Partial<typeof pagamento
 }
 
 // ---------- EVENTOS ----------
-// ---------- EVENTOS ----------
 export async function getEventosBySala(salaId: number) {
   return db.select().from(eventos)
     .where(eq(eventos.salaId, salaId))
@@ -337,6 +337,22 @@ export async function deleteEvento(id: number) {
   await db.delete(eventos).where(eq(eventos.id, id));
 }
 
+// Na seção de EVENTOS, adicione esta nova função:
+
+export async function getEventosProximos(salaId: number, limit: number = 10) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  
+  return db.select()
+    .from(eventos)
+    .where(and(
+      eq(eventos.salaId, salaId),
+      sql`${eventos.data} >= ${hoje.toISOString()}`
+    ))
+    .orderBy(eventos.data)
+    .limit(limit);
+}
+
 // ---------- METAS ----------
 export async function getMetasBySala(salaId: number) {
   return db.select().from(metas).where(eq(metas.salaId, salaId));
@@ -350,6 +366,204 @@ export async function createMeta(data: typeof metas.$inferInsert) {
 export async function updateMeta(id: number, data: Partial<typeof metas.$inferInsert>) {
   const [meta] = await db.update(metas).set({ ...data, updatedAt: new Date() }).where(eq(metas.id, id)).returning();
   return meta;
+}
+
+export async function getMetaById(id: number) {
+  const [meta] = await db.select().from(metas).where(eq(metas.id, id)).limit(1);
+  return meta;
+}
+
+// ---------- CONTRIBUIÇÕES DE METAS ----------
+export async function getContribuicoesByMeta(metaId: number) {
+  const contribuicoes = await db
+    .select({
+      id: contribuicoesMeta.id,
+      metaId: contribuicoesMeta.metaId,
+      alunoId: contribuicoesMeta.alunoId,
+      alunoNome: usuarios.nome,
+      alunoAvatar: usuarios.avatarUrl,
+      valor: contribuicoesMeta.valor,
+      descricao: contribuicoesMeta.descricao,
+      data: contribuicoesMeta.data,
+      createdAt: contribuicoesMeta.createdAt
+    })
+    .from(contribuicoesMeta)
+    .leftJoin(usuarios, eq(contribuicoesMeta.alunoId, usuarios.id))
+    .where(eq(contribuicoesMeta.metaId, metaId))
+    .orderBy(desc(contribuicoesMeta.data));
+  
+  return contribuicoes.map(c => ({
+    ...c,
+    valor: parseFloat(c.valor)
+  }));
+}
+
+export async function deleteMeta(id: number) {
+  return await db.transaction(async (tx) => {
+    // Primeiro deletar todas as contribuições associadas
+    await tx.delete(contribuicoesMeta)
+      .where(eq(contribuicoesMeta.metaId, id));
+    
+    // Depois deletar o histórico
+    await tx.delete(historicoMeta)
+      .where(eq(historicoMeta.metaId, id));
+    
+    // Finalmente deletar a meta
+    await tx.delete(metas)
+      .where(eq(metas.id, id));
+  });
+}
+
+export async function createContribuicao(data: {
+  metaId: number;
+  alunoId: number;
+  valor: string;
+  descricao?: string;
+  createdBy: number;
+}) {
+  // Iniciar transação
+  return await db.transaction(async (tx) => {
+    // 1. Criar a contribuição
+    const [contrib] = await tx.insert(contribuicoesMeta).values({
+      metaId: data.metaId,
+      alunoId: data.alunoId,
+      valor: data.valor,
+      descricao: data.descricao || null,
+      data: new Date(),
+      createdAt: new Date()
+    }).returning();
+
+    // 2. Atualizar o valor atual da meta
+    const meta = await tx.select().from(metas).where(eq(metas.id, data.metaId)).limit(1);
+    if (meta.length > 0) {
+      const valorAtual = parseFloat(meta[0].valorAtual || "0") + parseFloat(data.valor);
+      await tx.update(metas)
+        .set({ 
+          valorAtual: valorAtual.toString(),
+          updatedAt: new Date() 
+        })
+        .where(eq(metas.id, data.metaId));
+    }
+
+    // 3. Registrar no histórico
+    const [aluno] = await tx.select().from(usuarios).where(eq(usuarios.id, data.alunoId)).limit(1);
+    await tx.insert(historicoMeta).values({
+      metaId: data.metaId,
+      tipo: "update",
+      descricao: `Contribuição de R$ ${parseFloat(data.valor).toFixed(2)} adicionada para ${aluno?.nome || 'aluno'}`,
+      usuarioId: data.createdBy,
+      data: new Date()
+    });
+
+    return contrib;
+  });
+}
+
+export async function updateContribuicao(id: number, data: {
+  alunoId?: number;
+  valor?: string;
+  descricao?: string;
+}) {
+  return await db.transaction(async (tx) => {
+    // 1. Buscar contribuição original para calcular diferença
+    const [contribOriginal] = await tx.select()
+      .from(contribuicoesMeta)
+      .where(eq(contribuicoesMeta.id, id))
+      .limit(1);
+
+    if (!contribOriginal) {
+      throw new Error("Contribuição não encontrada");
+    }
+
+    // 2. Atualizar contribuição
+    const updateData: any = {};
+    if (data.alunoId !== undefined) updateData.alunoId = data.alunoId;
+    if (data.valor !== undefined) updateData.valor = data.valor;
+    if (data.descricao !== undefined) updateData.descricao = data.descricao;
+    updateData.updatedAt = new Date();
+
+    const [contrib] = await tx.update(contribuicoesMeta)
+      .set(updateData)
+      .where(eq(contribuicoesMeta.id, id))
+      .returning();
+
+    // 3. Recalcular valor total da meta
+    const todasContribs = await tx.select()
+      .from(contribuicoesMeta)
+      .where(eq(contribuicoesMeta.metaId, contribOriginal.metaId));
+
+    const novoValorTotal = todasContribs.reduce((sum, c) => sum + parseFloat(c.valor), 0);
+
+    await tx.update(metas)
+      .set({ 
+        valorAtual: novoValorTotal.toString(),
+        updatedAt: new Date() 
+      })
+      .where(eq(metas.id, contribOriginal.metaId));
+
+    return contrib;
+  });
+}
+
+export async function deleteContribuicao(id: number) {
+  return await db.transaction(async (tx) => {
+    // 1. Buscar contribuição para saber a meta
+    const [contrib] = await tx.select()
+      .from(contribuicoesMeta)
+      .where(eq(contribuicoesMeta.id, id))
+      .limit(1);
+
+    if (!contrib) {
+      throw new Error("Contribuição não encontrada");
+    }
+
+    // 2. Deletar contribuição
+    await tx.delete(contribuicoesMeta)
+      .where(eq(contribuicoesMeta.id, id));
+
+    // 3. Recalcular valor total da meta
+    const todasContribs = await tx.select()
+      .from(contribuicoesMeta)
+      .where(eq(contribuicoesMeta.metaId, contrib.metaId));
+
+    const novoValorTotal = todasContribs.reduce((sum, c) => sum + parseFloat(c.valor), 0);
+
+    await tx.update(metas)
+      .set({ 
+        valorAtual: novoValorTotal.toString(),
+        updatedAt: new Date() 
+      })
+      .where(eq(metas.id, contrib.metaId));
+
+    // 4. Registrar no histórico (opcional, pode ser feito no frontend)
+    const [admin] = await tx.select().from(usuarios).where(eq(usuarios.id, 1)).limit(1);
+    await tx.insert(historicoMeta).values({
+      metaId: contrib.metaId,
+      tipo: "edit",
+      descricao: `Contribuição de R$ ${parseFloat(contrib.valor).toFixed(2)} removida`,
+      usuarioId: admin?.id || 1,
+      data: new Date()
+    });
+  });
+}
+
+// ---------- HISTÓRICO DE METAS ----------
+export async function getHistoricoByMeta(metaId: number) {
+  const historico = await db
+    .select({
+      id: historicoMeta.id,
+      metaId: historicoMeta.metaId,
+      tipo: historicoMeta.tipo,
+      descricao: historicoMeta.descricao,
+      usuarioNome: usuarios.nome,
+      data: historicoMeta.data
+    })
+    .from(historicoMeta)
+    .leftJoin(usuarios, eq(historicoMeta.usuarioId, usuarios.id))
+    .where(eq(historicoMeta.metaId, metaId))
+    .orderBy(desc(historicoMeta.data));
+  
+  return historico;
 }
 
 // ---------- CAIXA ----------

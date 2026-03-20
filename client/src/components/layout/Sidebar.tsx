@@ -11,6 +11,7 @@ const adminLinks = [
   { to: "/admin/rifas", icon: "confirmation_number", label: "Rifas" },
   { to: "/admin/pagamentos", icon: "payments", label: "Pagamentos" },
   { to: "/admin/eventos", icon: "event", label: "Eventos" },
+  { to: "/admin/metas", icon: "stars", label: "Metas" },
   { to: "/admin/ranking", icon: "emoji_events", label: "Ranking" },
   { to: "/admin/relatorios", icon: "bar_chart", label: "Relatórios" },
   { to: "/admin/configuracoes", icon: "settings", label: "Configurações" },
@@ -25,28 +26,37 @@ const alunoLinks = [
 ];
 
 export default function Sidebar({ role }: SidebarProps) {
-  const { logout } = useAuth();
+  const { logout, auth } = useAuth();
   const navigate = useNavigate();
   const links = role === "admin" ? adminLinks : alunoLinks;
   const portalLabel = role === "admin" ? "Admin Portal" : "Área do Aluno";
-  const portalIcon = role === "admin" ? "auto_awesome_motion" : "account_balance_wallet";
+
+  // Foto do usuário (padrão)
+  const userPhotoUrl = "https://www.shutterstock.com/image-vector/graduation-hat-cap-icon-fotion-600nw-1450808255.jpg";
 
   const handleLogout = async () => {
     try {
       await logout.mutateAsync();
-      navigate("/");
+      // O logout já redireciona para "/" no mutation
     } catch (error) {
       console.error("Erro ao fazer logout:", error);
     }
   };
 
+  // Como não temos nome/email no auth, usamos um texto padrão baseado no role
+  const userName = role === "admin" ? "Administrador" : "Aluno";
+  const userEmail = auth?.userId ? `ID: ${auth.userId}` : "";
+
   return (
     <aside className="w-64 bg-[#1e3a5f] text-white border-r border-[#16304f] flex flex-col fixed h-full z-20">
-      {/* Logo */}
+      {/* Logo e Perfil */}
       <div className="p-6 flex items-center gap-3 border-b border-white/10">
-        <div className="size-10 rounded-lg bg-[#c6a43f] flex items-center justify-center text-[#1e3a5f] shrink-0">
-          <span className="material-symbols-outlined text-2xl">{portalIcon}</span>
-        </div>
+        {/* Foto do usuário */}
+        <img 
+          src={userPhotoUrl} 
+          alt="Foto de perfil"
+          className="size-10 rounded-lg object-cover shrink-0 border-2 border-[#c6a43f]"
+        />
         <div>
           <h1 className="text-xl font-bold leading-none text-white">Organize+</h1>
           <p className="text-xs uppercase tracking-wider font-semibold text-white/50 mt-1">

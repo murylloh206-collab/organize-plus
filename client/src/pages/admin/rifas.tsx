@@ -4,6 +4,7 @@ import Sidebar from "../../components/layout/Sidebar";
 import Header from "../../components/layout/Header";
 import { apiRequest } from "../../lib/queryClient";
 import html2canvas from "html2canvas";
+import { useAuth } from "../../hooks/useAuth";
 
 interface Ticket {
   id: number;
@@ -14,7 +15,7 @@ interface Ticket {
   status: "pendente" | "pago" | "cancelado";
   vendedorId: number;
   vendedorNome?: string;
-  rifaId: number; // Mudado de sorteioId para rifaId
+  rifaId: number;
 }
 
 interface Sorteio {
@@ -36,6 +37,7 @@ interface Aluno {
 
 export default function AdminSorteios() {
   const qc = useQueryClient();
+  const { auth } = useAuth();
   const resultadoRef = useRef<HTMLDivElement>(null);
   
   const [showForm, setShowForm] = useState(false);
@@ -50,12 +52,14 @@ export default function AdminSorteios() {
   const [ticketSelecionado, setTicketSelecionado] = useState<Ticket | null>(null);
   const [numeroSorteado, setNumeroSorteado] = useState<number | null>(null);
   const [vencedorInfo, setVencedorInfo] = useState<Ticket | null>(null);
+  const [isResorteio, setIsResorteio] = useState(false);
   
   // Estados do formulário de criação de sorteio
   const [nome, setNome] = useState("");
   const [premio, setPremio] = useState("");
   const [preco, setPreco] = useState("");
   const [totalNumeros, setTotalNumeros] = useState("200");
+  const [dataSorteio, setDataSorteio] = useState("");
   const [error, setError] = useState("");
   
   // Estados do formulário de edição de sorteio
@@ -63,6 +67,7 @@ export default function AdminSorteios() {
   const [editPremio, setEditPremio] = useState("");
   const [editPreco, setEditPreco] = useState("");
   const [editTotalNumeros, setEditTotalNumeros] = useState("");
+  const [editDataSorteio, setEditDataSorteio] = useState("");
   const [editError, setEditError] = useState("");
 
   // Estados do formulário de venda
@@ -74,7 +79,6 @@ export default function AdminSorteios() {
   const [vendaError, setVendaError] = useState("");
 
   // Estados para edição de venda
-  // Estados para edição de venda
   const [editVendaCompradorNome, setEditVendaCompradorNome] = useState("");
   const [editVendaCompradorContato, setEditVendaCompradorContato] = useState("");
   const [editVendaVendedorId, setEditVendaVendedorId] = useState<number | null>(null);
@@ -85,7 +89,7 @@ export default function AdminSorteios() {
   const [sorteando, setSorteando] = useState<number | null>(null);
 
   // Buscar sorteios
-  const { data: sorteios = [], isLoading } = useQuery<Sorteio[]>({ 
+  const { data: sorteios = [], isLoading, refetch: refetchSorteios } = useQuery<Sorteio[]>({ 
     queryKey: ["sorteios"], 
     queryFn: () => apiRequest("GET", "/rifas")
   });
@@ -115,12 +119,9 @@ export default function AdminSorteios() {
   const criar = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/rifas", data),
     onSuccess: () => { 
-      qc.invalidateQueries({ queryKey: ["sorteios"] }); 
+      refetchSorteios();
       setShowForm(false); 
-      setNome(""); 
-      setPremio(""); 
-      setPreco(""); 
-      setTotalNumeros("200");
+      resetForm();
     },
     onError: (e: any) => setError(e.message),
   });
@@ -129,7 +130,7 @@ export default function AdminSorteios() {
   const editar = useMutation({
     mutationFn: ({ id, ...data }: any) => apiRequest("PUT", `/rifas/${id}`, data),
     onSuccess: () => { 
-      qc.invalidateQueries({ queryKey: ["sorteios"] }); 
+      refetchSorteios();
       setShowEditModal(false); 
       setSorteioEditando(null);
     },
@@ -140,7 +141,7 @@ export default function AdminSorteios() {
   const deletar = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/rifas/${id}`),
     onSuccess: () => { 
-      qc.invalidateQueries({ queryKey: ["sorteios"] }); 
+      refetchSorteios();
       if (sorteioExpandido) setSorteioExpandido(null);
     },
   });
@@ -186,17 +187,27 @@ export default function AdminSorteios() {
   const sortear = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/rifas/${id}/sortear`, {}),
     onSuccess: (data) => { 
-      qc.invalidateQueries({ queryKey: ["sorteios"] }); 
+      refetchSorteios();
       setSorteando(null);
       setNumeroSorteado(data.numeroSorteado);
       setVencedorInfo(data.vencedor);
       setShowResultadoModal(true);
+      setIsResorteio(false);
     },
     onError: (e: any) => { 
       setSorteando(null); 
       alert(e.message); 
     },
   });
+
+  const resetForm = () => {
+    setNome("");
+    setPremio("");
+    setPreco("");
+    setTotalNumeros("200");
+    setDataSorteio("");
+    setError("");
+  };
 
   const resetVendaForm = () => {
     setVendaNumero(null);
@@ -240,6 +251,7 @@ export default function AdminSorteios() {
     setEditPremio(sorteio.premio);
     setEditPreco(sorteio.preco?.toString() || "");
     setEditTotalNumeros(sorteio.totalNumeros?.toString() || "200");
+    setEditDataSorteio(sorteio.dataSorteio || "");
     setShowEditModal(true);
   };
 
@@ -258,7 +270,7 @@ export default function AdminSorteios() {
       setEditVendaCompradorContato(ticketExistente.compradorContato || "");
       setEditVendaVendedorId(ticketExistente.vendedorId);
       setEditVendaValor(ticketExistente.valor.toString());
-      setEditVendaStatus(ticketExistente.status); // Adicionar status
+      setEditVendaStatus(ticketExistente.status);
       setShowEditVendaModal(true);
     } else {
       // Se não existe, abrir modal de nova venda
@@ -356,12 +368,10 @@ export default function AdminSorteios() {
         });
       } catch (error) {
         console.log('Erro ao compartilhar:', error);
-        // Fallback para copiar texto
         navigator.clipboard.writeText(texto);
         alert('Texto copiado para a área de transferência!');
       }
     } else {
-      // Fallback para navegadores sem suporte a share
       navigator.clipboard.writeText(texto);
       alert('Texto copiado para a área de transferência!');
     }
@@ -375,7 +385,7 @@ export default function AdminSorteios() {
     const totalVendidos = numerosVendidos + numerosReservados;
     const sorteio = sorteios.find((s: Sorteio) => s.id === sorteioId);
     const totalNumeros = sorteio?.totalNumeros || 200;
-    const percentual = totalNumeros > 0 ? (totalVendidos / totalNumeros) * 100 : 0;
+    const percentual = totalNumeros > 0 ? (numerosVendidos / totalNumeros) * 100 : 0;
     const receitaTotal = ticketsDoSorteio
       .filter((t: Ticket) => t.status === "pago")
       .reduce((sum: number, t: Ticket) => sum + t.valor, 0);
@@ -401,69 +411,103 @@ export default function AdminSorteios() {
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Gerenciar Sorteios</h3>
-              <p className="text-sm text-slate-500 mt-1">Gerencie suas rifas e sorteios</p>
+              <p className="text-sm text-slate-500 mt-1">{sorteios.length} sorteios encontrados</p>
             </div>
-            <button onClick={() => setShowForm(true)} className="bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 shadow-sm">
-              <span className="material-symbols-outlined text-sm">add</span> Criar Sorteio
+            <button 
+              onClick={() => setShowForm(true)} 
+              className="bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 shadow-sm"
+            >
+              <span className="material-symbols-outlined text-sm">add</span> 
+              Criar Sorteio
             </button>
           </div>
 
-          {/* Formulário de novo sorteio */}
+          {/* Modal de Novo Sorteio */}
           {showForm && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-4 shadow-sm">
-              <h4 className="font-bold text-lg">Criar Novo Sorteio</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <input 
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  placeholder="Nome do sorteio" 
-                  value={nome} 
-                  onChange={e => setNome(e.target.value)} 
-                />
-                <input 
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  placeholder="Prêmio" 
-                  value={premio} 
-                  onChange={e => setPremio(e.target.value)} 
-                />
-                <input 
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  type="number" 
-                  placeholder="Preço do número (R$)" 
-                  value={preco} 
-                  onChange={e => setPreco(e.target.value)} 
-                />
-                <input 
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  type="number" 
-                  placeholder="Total de números" 
-                  value={totalNumeros} 
-                  onChange={e => setTotalNumeros(e.target.value)} 
-                />
-              </div>
-              {error && <p className="text-red-500 text-sm">{error}</p>}
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => criar.mutate({ 
-                    nome, 
-                    premio, 
-                    preco: parseFloat(preco), 
-                    totalNumeros: parseInt(totalNumeros) 
-                  })} 
-                  disabled={criar.isPending} 
-                  className="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
-                >
-                  {criar.isPending ? "Criando..." : "Criar Sorteio"}
-                </button>
-                <button onClick={() => setShowForm(false)} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-semibold transition-all">
-                  Cancelar
-                </button>
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full shadow-xl">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-xl font-bold text-slate-900 dark:text-white">Novo Sorteio</h4>
+                  <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  <input
+                    className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
+                    placeholder="Nome do sorteio"
+                    value={nome}
+                    onChange={e => setNome(e.target.value)}
+                  />
+                  <input
+                    className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
+                    placeholder="Prêmio"
+                    value={premio}
+                    onChange={e => setPremio(e.target.value)}
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
+                      type="number"
+                      placeholder="Preço do número (R$)"
+                      value={preco}
+                      onChange={e => setPreco(e.target.value)}
+                    />
+                    <input
+                      className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
+                      type="number"
+                      placeholder="Total de números"
+                      value={totalNumeros}
+                      onChange={e => setTotalNumeros(e.target.value)}
+                    />
+                  </div>
+                  <input
+                    className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
+                    type="date"
+                    placeholder="Data do sorteio"
+                    value={dataSorteio}
+                    onChange={e => setDataSorteio(e.target.value)}
+                  />
+                  
+                  {error && <p className="text-red-500 text-sm">{error}</p>}
+                  
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={() => criar.mutate({ 
+                        nome, 
+                        premio, 
+                        preco: parseFloat(preco), 
+                        totalNumeros: parseInt(totalNumeros),
+                        dataSorteio: dataSorteio || null,
+                        salaId: auth?.salaId,
+                        status: "ativa"
+                      })}
+                      disabled={criar.isPending}
+                      className="flex-1 bg-primary hover:bg-primary/90 text-white py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
+                    >
+                      {criar.isPending ? "Criando..." : "Criar Sorteio"}
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setShowForm(false);
+                        resetForm();
+                      }} 
+                      className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-lg text-sm font-semibold transition-all"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
           {/* Lista de sorteios em cards expansíveis */}
           <div className="space-y-4">
-            {sorteios.length > 0 ? (
+            {isLoading ? (
+              <div className="text-center py-12 text-slate-400">Carregando...</div>
+            ) : sorteios.length > 0 ? (
               sorteios.map((s: Sorteio) => {
                 const stats = getEstatisticas(s.id);
                 
@@ -688,20 +732,30 @@ export default function AdminSorteios() {
                 value={editPremio}
                 onChange={e => setEditPremio(e.target.value)}
               />
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
+                  type="number"
+                  placeholder="Preço do número (R$)"
+                  value={editPreco}
+                  onChange={e => setEditPreco(e.target.value)}
+                />
+                <input
+                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
+                  type="number"
+                  placeholder="Total de números"
+                  value={editTotalNumeros}
+                  onChange={e => setEditTotalNumeros(e.target.value)}
+                />
+              </div>
               <input
                 className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                type="number"
-                placeholder="Preço do número (R$)"
-                value={editPreco}
-                onChange={e => setEditPreco(e.target.value)}
+                type="date"
+                placeholder="Data do sorteio"
+                value={editDataSorteio}
+                onChange={e => setEditDataSorteio(e.target.value)}
               />
-              <input
-                className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                type="number"
-                placeholder="Total de números"
-                value={editTotalNumeros}
-                onChange={e => setEditTotalNumeros(e.target.value)}
-              />
+              
               {editError && <p className="text-red-500 text-sm">{editError}</p>}
               
               <div className="flex gap-3 pt-4">
@@ -711,7 +765,8 @@ export default function AdminSorteios() {
                     nome: editNome, 
                     premio: editPremio, 
                     preco: parseFloat(editPreco),
-                    totalNumeros: parseInt(editTotalNumeros)
+                    totalNumeros: parseInt(editTotalNumeros),
+                    dataSorteio: editDataSorteio || null
                   })}
                   disabled={editar.isPending}
                   className="flex-1 bg-primary hover:bg-primary/90 text-white py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
@@ -818,7 +873,7 @@ export default function AdminSorteios() {
         </div>
       )}
 
-            {/* Modal de Edição de Venda */}
+      {/* Modal de Edição de Venda */}
       {showEditVendaModal && ticketSelecionado && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full shadow-xl">
@@ -830,14 +885,13 @@ export default function AdminSorteios() {
             </div>
             
             <div className="space-y-4">
-              {/* Status do Ticket - AGORA EDITÁVEL */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                   Status da Venda *
                 </label>
                 <select
                   className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  value={editVendaStatus || ticketSelecionado.status}
+                  value={editVendaStatus}
                   onChange={e => setEditVendaStatus(e.target.value as "pago" | "pendente" | "cancelado")}
                 >
                   <option value="pendente">🔵 Pendente</option>
@@ -939,12 +993,18 @@ export default function AdminSorteios() {
           <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
             <div className="p-8 text-center flex flex-col items-center gap-6">
               <div className="size-20 rounded-full bg-primary/10 text-primary flex items-center justify-center">
-                <span className="material-symbols-outlined !text-4xl">celebration</span>
+                <span className="material-symbols-outlined !text-4xl">
+                  {isResorteio ? 'autorenew' : 'celebration'}
+                </span>
               </div>
               <div>
-                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Preparado para o Sorteio?</h3>
+                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">
+                  {isResorteio ? 'Realizar novo sorteio?' : 'Preparado para o Sorteio?'}
+                </h3>
                 <p className="text-slate-500 dark:text-slate-400">
-                  Esta ação irá sortear aleatoriamente um número entre os vendidos e definirá o ganhador do sorteio.
+                  {isResorteio 
+                    ? 'Um novo número será sorteado. O resultado anterior será substituído.'
+                    : 'Esta ação irá sortear aleatoriamente um número entre os vendidos e definirá o ganhador do sorteio.'}
                 </p>
               </div>
               <div className="w-full bg-slate-50 dark:bg-slate-800 p-6 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
@@ -955,7 +1015,10 @@ export default function AdminSorteios() {
               </div>
               <div className="flex gap-4 w-full">
                 <button 
-                  onClick={() => setShowSorteioModal(false)}
+                  onClick={() => {
+                    setShowSorteioModal(false);
+                    setIsResorteio(false);
+                  }}
                   className="flex-1 h-12 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
                 >
                   Cancelar
@@ -964,7 +1027,7 @@ export default function AdminSorteios() {
                   onClick={handleIniciarSorteio}
                   className="flex-1 h-12 rounded-lg bg-primary text-white font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all"
                 >
-                  Iniciar Sorteio
+                  {isResorteio ? 'Sortear Novamente' : 'Iniciar Sorteio'}
                 </button>
               </div>
             </div>
@@ -1026,6 +1089,20 @@ export default function AdminSorteios() {
                     Baixar
                   </button>
                 </div>
+                
+                {/* Botão Sortear Novamente */}
+                <button 
+                  onClick={() => {
+                    setShowResultadoModal(false);
+                    setShowSorteioModal(true);
+                    setIsResorteio(true);
+                  }}
+                  className="flex items-center justify-center w-full h-12 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-amber-500/20"
+                >
+                  <span className="material-symbols-outlined mr-2">refresh</span>
+                  Sortear Novamente
+                </button>
+                
                 <button 
                   onClick={() => setShowResultadoModal(false)}
                   className="flex items-center justify-center w-full h-12 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-lg font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
