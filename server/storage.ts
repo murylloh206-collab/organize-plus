@@ -262,17 +262,186 @@ export async function getPagamentosBySala(salaId: number) {
 }
 
 export async function getPagamentosByUsuario(usuarioId: number) {
-  return db.select().from(pagamentos).where(eq(pagamentos.usuarioId, usuarioId)).orderBy(desc(pagamentos.dataVencimento));
+  return db.select().from(pagamentos)
+    .where(eq(pagamentos.usuarioId, usuarioId))
+    .orderBy(desc(pagamentos.dataVencimento));
 }
 
-export async function createPagamento(data: typeof pagamentos.$inferInsert) {
-  const [pag] = await db.insert(pagamentos).values(data).returning();
-  return pag;
+export async function getPagamentosPendentes(salaId: number) {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  
+  return db.select({
+    pagamento: pagamentos,
+    usuario: { nome: usuarios.nome, email: usuarios.email, avatarUrl: usuarios.avatarUrl },
+  })
+    .from(pagamentos)
+    .leftJoin(usuarios, eq(pagamentos.usuarioId, usuarios.id))
+    .where(and(
+      eq(pagamentos.salaId, salaId),
+      eq(pagamentos.status, "pendente")
+    ))
+    .orderBy(pagamentos.dataVencimento);
 }
 
-export async function updatePagamento(id: number, data: Partial<typeof pagamentos.$inferInsert>) {
-  const [pag] = await db.update(pagamentos).set(data).where(eq(pagamentos.id, id)).returning();
-  return pag;
+export async function getPagamentoById(id: number) {
+  const [pagamento] = await db.select().from(pagamentos)
+    .where(eq(pagamentos.id, id))
+    .limit(1);
+  return pagamento;
+}
+
+export async function createPagamento(data: {
+  descricao: string;
+  valor: string;
+  usuarioId: number;
+  salaId: number;
+  dataVencimento: Date;
+  formaPagamento: string;
+  status: "pendente" | "pago" | "atrasado";
+}) {
+  return await db.transaction(async (tx) => {
+    // 1. Criar o pagamento
+    const [pagamento] = await tx.insert(pagamentos).values({
+      descricao: data.descricao,
+      valor: data.valor,
+      usuarioId: data.usuarioId,
+      salaId: data.salaId,
+      dataVencimento: data.dataVencimento,
+      formaPagamento: data.formaPagamento,
+      status: data.status,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+
+    // 2. Buscar dados do aluno
+    const [aluno] = await tx.select().from(usuarios).where(eq(usuarios.id, data.usuarioId));
+
+    // 3. Criar evento no calendário
+    await tx.insert(eventos).values({
+      titulo: `📅 Vencimento: ${data.descricao}`,
+      descricao: `Pagamento pendente de R$ ${parseFloat(data.valor).toFixed(2)} para ${aluno?.nome}`,
+      data: data.dataVencimento,
+      tipo: "vencimento",
+      status: "planejado",
+      salaId: data.salaId,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    return pagamento;
+  });
+}
+
+export async function updatePagamento(id: number, data: {
+  status?: "pendente" | "pago" | "atrasado";
+  dataPagamento?: Date;
+  formaPagamento?: string;
+  comprovanteUrl?: string;
+  descricaoPagamento?: string;
+}) {
+  const updateData: any = {};
+  if (data.status !== undefined) updateData.status = data.status;
+  if (data.dataPagamento !== undefined) updateData.dataPagamento = data.dataPagamento;
+  if (data.formaPagamento !== undefined) updateData.formaPagamento = data.formaPagamento;
+  if (data.comprovanteUrl !== undefined) updateData.comprovanteUrl = data.comprovanteUrl;
+  if (data.descricaoPagamento !== undefined) updateData.descricaoPagamento = data.descricaoPagamento;
+  updateData.updatedAt = new Date();
+
+  const [pagamento] = await db.update(pagamentos)
+    .set(updateData)
+    .where(eq(pagamentos.id, id))
+    .returning();
+  
+  return pagamento;
+}
+
+export async function confirmarPagamentoViaComprovante(
+  pagamentoId: number,
+  comprovanteUrl: string,
+  descricaoPagamento?: string
+) {
+  return await db.transaction(async (tx) => {
+    const [pagamento] = await tx.select().from(pagamentos)
+      .where(eq(pagamentos.id, pagamentoId));
+
+    if (!pagamento) {
+      throw new Error("Pagamento não encontrado");
+    }
+
+    if (pagamento.status === "pago") {
+      throw new Error("Este pagamento já foi pago");
+    }
+
+    const [atualizado] = await tx.update(pagamentos)
+      .set({
+        status: "pago",
+        dataPagamento: new Date(),
+        comprovanteUrl,
+        descricaoPagamento: descricaoPagamento || null,
+        updatedAt: new Date()
+      })
+      .where(eq(pagamentos.id, pagamentoId))
+      .returning();
+
+    const [evento] = await tx.select().from(eventos)
+      .where(and(
+        eq(eventos.titulo, `📅 Vencimento: ${pagamento.descricao}`),
+        eq(eventos.status, "planejado")
+      ))
+      .limit(1);
+
+    if (evento) {
+      await tx.update(eventos)
+        .set({
+          status: "realizado",
+          descricao: `${evento.descricao} - Pago em ${new Date().toLocaleDateString()}`,
+          updatedAt: new Date()
+        })
+        .where(eq(eventos.id, evento.id));
+    }
+
+    return atualizado;
+  });
+}
+
+// Deletar pagamento - VERSÃO CORRIGIDA
+export async function deletePagamento(id: number) {
+  console.log(`[Storage] Iniciando deleção do pagamento ID: ${id}`);
+  
+  return await db.transaction(async (tx) => {
+    // 1. Buscar pagamento antes de deletar
+    const [pagamento] = await tx.select().from(pagamentos)
+      .where(eq(pagamentos.id, id));
+
+    if (!pagamento) {
+      console.log(`[Storage] Pagamento ID ${id} não encontrado`);
+      throw new Error("Pagamento não encontrado");
+    }
+    
+    console.log(`[Storage] Pagamento encontrado:`, pagamento);
+
+    // 2. Buscar evento relacionado
+    const [evento] = await tx.select().from(eventos)
+      .where(and(
+        eq(eventos.titulo, `📅 Vencimento: ${pagamento.descricao}`),
+        eq(eventos.tipo, "vencimento")
+      ))
+      .limit(1);
+
+    // 3. Se encontrar evento, deletar
+    if (evento) {
+      console.log(`[Storage] Evento relacionado encontrado ID: ${evento.id}, deletando...`);
+      await tx.delete(eventos).where(eq(eventos.id, evento.id));
+    }
+
+    // 4. Deletar pagamento
+    console.log(`[Storage] Deletando pagamento ID: ${id}`);
+    await tx.delete(pagamentos).where(eq(pagamentos.id, id));
+
+    console.log(`[Storage] Pagamento ID ${id} deletado com sucesso`);
+    return { success: true, message: "Pagamento deletado com sucesso" };
+  });
 }
 
 // ---------- EVENTOS ----------

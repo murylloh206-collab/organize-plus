@@ -10,12 +10,20 @@ export const queryClient = new QueryClient({
   },
 });
 
-export async function apiRequest(method: string, path: string, body?: unknown) {
+export async function apiRequest(
+  method: string,
+  path: string,
+  body?: unknown,
+  isFormData?: boolean
+) {
+  const isForm = isFormData || body instanceof FormData;
+
   const res = await fetch(`/api${path}`, {
     method,
-    headers: body ? { "Content-Type": "application/json" } : {},
+    // Não setar Content-Type para FormData — o browser inclui o boundary automaticamente
+    headers: isForm ? {} : body ? { "Content-Type": "application/json" } : {},
     credentials: "include",
-    body: body ? JSON.stringify(body) : undefined,
+    body: isForm ? (body as FormData) : body ? JSON.stringify(body) : undefined,
   });
 
   if (!res.ok) {

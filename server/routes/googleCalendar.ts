@@ -52,11 +52,16 @@ router.post("/sync-event/:id", requireAuth, async (req, res) => {
       return res.status(404).json({ message: "Evento não encontrado" });
     }
 
+    // Verificar se a data existe
+    if (!evento.data) {
+      return res.status(400).json({ message: "Evento não possui data definida" });
+    }
+
     // Criar no Google Calendar
     const googleEvent = await createCalendarEvent(userId, {
       titulo: evento.titulo,
       descricao: evento.descricao || undefined,
-      data: new Date(evento.data),
+      data: new Date(evento.data), // agora é seguro porque verificamos que não é null
       local: evento.local || undefined
     });
 

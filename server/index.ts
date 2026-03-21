@@ -38,6 +38,9 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Servir uploads (comprovantes etc.) — disponível em dev e produção
+app.use("/api/uploads", express.static(path.join(__dirname, "../uploads")));
+
 app.use(session({
   store: new PgSession({
     pool,

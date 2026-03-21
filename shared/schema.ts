@@ -85,6 +85,9 @@ export const pagamentos = pgTable("pagamentos", {
   status: statusPagamentoEnum("status").default("pendente").notNull(),
   dataVencimento: timestamp("data_vencimento"),
   dataPagamento: timestamp("data_pagamento"),
+  formaPagamento: text("forma_pagamento").default("pix"), 
+  comprovanteUrl: text("comprovante_url"),
+  descricaoPagamento: text("descricao_pagamento"), 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

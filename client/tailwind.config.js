@@ -13,6 +13,8 @@ export default {
       colors: {
         // Flat / base colors (regular buttons)
         background: "hsl(var(--background) / <alpha-value>)",
+        "background-light": "#f8fafc",   // equivalente ao slate-50 / fundo claro
+        "background-dark": "#0f1e2e",    // fundo escuro profundo para dark mode
         foreground: "hsl(var(--foreground) / <alpha-value>)",
         border: "hsl(var(--border) / <alpha-value>)",
         input: "hsl(var(--input) / <alpha-value>)",
