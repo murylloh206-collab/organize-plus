@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import { db } from "./db.js";
 import { usuarios, chaves } from "../shared/schema.js";
 import { eq } from "drizzle-orm";
+import "express-session";
 export async function hashSenha(senha) {
     return bcrypt.hash(senha, 12);
 }
