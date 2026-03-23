@@ -3,6 +3,7 @@ import { db } from "./db.js";
 import { usuarios, chaves, salas } from "../shared/schema.js";
 import { eq } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
+import "express-session";
 
 declare module "express-session" {
   interface SessionData {
