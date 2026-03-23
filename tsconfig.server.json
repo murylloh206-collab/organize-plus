@@ -1,13 +1,16 @@
 {
-  "extends": "./tsconfig.json",
   "compilerOptions": {
+    "target": "ES2020",
     "module": "CommonJS",
     "moduleResolution": "node",
     "outDir": "dist/server",
-    "target": "ES2020",
-    "noEmit": false,
+    "rootDir": ".",
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true
+    "resolveJsonModule": true,
+    "types": ["node", "express", "express-session"]
   },
   "include": ["server/**/*", "shared/**/*"],
   "exclude": ["node_modules", "client"]
