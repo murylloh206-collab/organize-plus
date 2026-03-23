@@ -17,6 +17,7 @@ import metasRoutes from "./routes/metas.js";
 import caixaRoutes from "./routes/caixa.js";
 import salasRoutes from "./routes/salas.js";
 import googleCalendarRoutes from "./routes/googleCalendar.js";
+import "express-session";
 
 config();
 
