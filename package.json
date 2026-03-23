@@ -9,7 +9,7 @@
     "dev:server": "tsx watch server/index.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "build": "tsc -p tsconfig.server.json && vite build --config client/vite.config.ts",
+    "build": "vite build --config client/vite.config.ts",
     "build:client": "vite build --config client/vite.config.ts",
     "build:server": "tsc -p tsconfig.server.json",
     "start": "cross-env NODE_ENV=production node dist/server/index.js",
