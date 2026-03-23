@@ -1,304 +1,248 @@
 import { useQuery } from "@tanstack/react-query";
-import Sidebar from "../../components/layout/Sidebar";
-import Header from "../../components/layout/Header";
+import { Link } from "react-router-dom";
+import MobileLayout from "../../components/layout/MobileLayout";
+import MobileHeader from "../../components/layout/MobileHeader";
+import MobileMetricCard from "../../components/ui/MobileMetricCard";
+import MobileCard from "../../components/ui/MobileCard";
+import MobileBadge from "../../components/ui/MobileBadge";
+import MobileAvatar from "../../components/ui/MobileAvatar";
+import ProgressCircle from "../../components/ui/ProgressCircle";
 import { apiRequest } from "../../lib/queryClient";
 import { useAuth } from "../../hooks/useAuth";
-
-function StatCard({ label, value, icon, trend, trendText }: { label: string; value: string; icon: string; trend?: string; trendText?: string }) {
-  return (
-    <div className="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group transition-all hover:shadow-md">
-      <div className="flex justify-between items-start">
-        <div>
-          <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">{label}</p>
-          <h3 className="text-2xl font-bold mt-2 text-slate-900 dark:text-white">{value}</h3>
-        </div>
-        <div className="p-2.5 bg-[#0F3B7A]/5 text-[#0F3B7A] rounded-lg transition-colors group-hover:bg-[#0F3B7A] group-hover:text-white">
-          <span className="material-symbols-outlined">{icon}</span>
-        </div>
-      </div>
-      {trend && (
-        <div className="mt-4 flex items-center gap-1.5">
-          <span className="text-emerald-600 text-xs font-bold flex items-center gap-0.5">
-            <span className="material-symbols-outlined text-sm">trending_up</span> {trend}
-          </span>
-          <span className="text-slate-400 text-[11px]">{trendText || "vs mês passado"}</span>
-        </div>
-      )}
-    </div>
-  );
-}
+import { formatCurrency } from "../../components/shared/CurrencyFormat";
+import { formatDate } from "../../components/shared/DateFormat";
 
 export default function AdminDashboard() {
   const { auth } = useAuth();
-  
-  // Buscar dados reais do dashboard
-const { data: stats, isLoading: statsLoading } = useQuery({
-  queryKey: ["dashboard-stats", auth?.salaId],
-  queryFn: async () => {
-    if (!auth?.salaId) {
-      return {
-        totalArrecadado: 0,
-        totalAlunos: 0,
-        totalTickets: 0,
-        saldoCaixa: 0,
-        variacaoArrecadado: 0,
-        variacaoAlunos: 0,
-        variacaoRifas: 0
-      };
-    }
-    const response = await apiRequest("GET", `/dashboard/stats?salaId=${auth.salaId}`);
-    return response;
-  },
-  enabled: !!auth?.userId,
-});
 
-// Buscar pagamentos recentes
-const { data: pagamentos, isLoading: pagamentosLoading } = useQuery({
-  queryKey: ["pagamentos-recentes", auth?.salaId],
-  queryFn: async () => {
-    if (!auth?.salaId) return [];
-    const response = await apiRequest("GET", `/dashboard/recentes?salaId=${auth.salaId}&limite=8`);
-    return response;
-  },
-  enabled: !!auth?.userId,
-});
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ["dashboard-stats", auth?.salaId],
+    queryFn: async () => {
+      if (!auth?.salaId) return { totalArrecadado: 0, totalAlunos: 0, totalTickets: 0, saldoCaixa: 0 };
+      return apiRequest("GET", `/dashboard/stats?salaId=${auth.salaId}`);
+    },
+    enabled: !!auth?.userId,
+  });
 
-// Buscar dados da meta da formatura
-const { data: metaData } = useQuery({
-  queryKey: ["meta-formatura", auth?.salaId],
-  queryFn: async () => {
-    if (!auth?.salaId) {
-      return { metaTotal: 0, arrecadado: 0, percentual: 0 };
-    }
-    const response = await apiRequest("GET", `/dashboard/formatura?salaId=${auth.salaId}`);
-    return response;
-  },
-  enabled: !!auth?.userId,
-});
+  const { data: pagamentos, isLoading: pagamentosLoading } = useQuery({
+    queryKey: ["pagamentos-recentes", auth?.salaId],
+    queryFn: async () => {
+      if (!auth?.salaId) return [];
+      return apiRequest("GET", `/dashboard/recentes?salaId=${auth.salaId}&limite=5`);
+    },
+    enabled: !!auth?.userId,
+  });
 
-// Buscar receita mensal
-const { data: receitaMensal } = useQuery({
-  queryKey: ["receita-mensal", auth?.salaId],
-  queryFn: async () => {
-    if (!auth?.salaId) {
-      return {
-        meses: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"],
-        valores: [0, 0, 0, 0, 0, 0],
-        mesAtual: new Date().getMonth()
-      };
-    }
-    const response = await apiRequest("GET", `/dashboard/mensal?salaId=${auth.salaId}`);
-    return response;
-  },
-  enabled: !!auth?.userId,
-});
+  const { data: metaData } = useQuery({
+    queryKey: ["meta-formatura", auth?.salaId],
+    queryFn: async () => {
+      if (!auth?.salaId) return { metaTotal: 0, arrecadado: 0, percentual: 0 };
+      return apiRequest("GET", `/dashboard/formatura?salaId=${auth.salaId}`);
+    },
+    enabled: !!auth?.userId,
+  });
 
-  const totalArrecadado = stats?.totalArrecadado ?? 0;
-  const totalAlunos = stats?.totalAlunos ?? 0;
-  const totalTickets = stats?.totalTickets ?? 0;
-  const saldo = stats?.saldoCaixa ?? 0;
+  const { data: receitaMensal } = useQuery({
+    queryKey: ["receita-mensal", auth?.salaId],
+    queryFn: async () => {
+      if (!auth?.salaId) return { meses: ["Jan","Fev","Mar","Abr","Mai","Jun"], valores: [0,0,0,0,0,0], mesAtual: 0 };
+      return apiRequest("GET", `/dashboard/mensal?salaId=${auth.salaId}`);
+    },
+    enabled: !!auth?.userId,
+  });
 
-  const metaTotal = metaData?.metaTotal ?? 0;
-  const metaArrecadado = metaData?.arrecadado ?? 0;
-  const percentualMeta = metaData?.percentual ?? 0;
-  const restante = metaTotal - metaArrecadado;
-
-  // Dados do gráfico mensal
-  const meses = receitaMensal?.meses ?? ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun"];
-  const valores = receitaMensal?.valores ?? [0, 0, 0, 0, 0, 0];
+  const totalArrecadado  = stats?.totalArrecadado ?? 0;
+  const totalAlunos      = stats?.totalAlunos ?? 0;
+  const totalTickets     = stats?.totalTickets ?? 0;
+  const saldo            = stats?.saldoCaixa ?? 0;
+  const metaTotal        = metaData?.metaTotal ?? 0;
+  const metaArrecadado   = metaData?.arrecadado ?? 0;
+  const percentualMeta   = metaData?.percentual ?? 0;
+  const meses = receitaMensal?.meses ?? ["Jan","Fev","Mar","Abr","Mai","Jun"];
+  const valores = receitaMensal?.valores ?? [0,0,0,0,0,0];
   const mesAtual = receitaMensal?.mesAtual ?? new Date().getMonth();
-
-  const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-  const statusBadge = (status: string) => {
-    if (status === "pago" || status === "completed") 
-      return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">Pago</span>;
-    if (status === "pendente" || status === "pending") 
-      return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">Pendente</span>;
-    return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400">Falhou</span>;
-  };
+  const maxValor = Math.max(...valores, 1);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background-light dark:bg-background-dark">
-      <Sidebar role="admin" />
-      <main className="flex-1 flex flex-col overflow-y-auto ml-64">
-        <Header title="Dashboard" />
-        
-        <div className="p-8 space-y-6">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard 
-              label="Total Arrecadado" 
-              value={statsLoading ? "..." : fmt(totalArrecadado)} 
-              icon="account_balance_wallet" 
-              trend={stats?.variacaoArrecadado ? `+${stats.variacaoArrecadado}%` : "+12.5%"} 
-              trendText="vs mês passado"
-            />
-            <StatCard 
-              label="Alunos Ativos" 
-              value={statsLoading ? "..." : String(totalAlunos)} 
-              icon="school" 
-              trend={stats?.variacaoAlunos ? `+${stats.variacaoAlunos}%` : "+3.2%"} 
-              trendText="desde início"
-            />
-            <StatCard 
-              label="Rifas Vendidas" 
-              value={statsLoading ? "..." : String(totalTickets)} 
-              icon="confirmation_number" 
-              trend={stats?.variacaoRifas ? `+${stats.variacaoRifas}%` : "+15.8%"} 
-              trendText="da meta"
-            />
-            <StatCard 
-              label="Saldo Caixa" 
-              value={statsLoading ? "..." : fmt(saldo)} 
-              icon="savings" 
+    <MobileLayout role="admin">
+      {/* Gradient Header */}
+      <div className="mobile-header-gradient pb-6 px-5 pt-12">
+        <div>
+          <p className="text-indigo-200 text-sm font-medium">Olá, Comissão </p>
+          <h1 className="text-2xl font-black text-white tracking-tight mt-0.5">Dashboard</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link to="/admin/configuracoes"
+            className="p-2 rounded-xl bg-white/20 hover:bg-white/30 transition-colors">
+            <span className="material-symbols-outlined text-white text-xl">settings</span>
+          </Link>
+        </div>
+      </div>
+
+      <div className="px-4 -mt-3 space-y-4 pb-6">
+        {/* Metric Cards 2x2 */}
+        <div className="grid grid-cols-2 gap-3 animate-slide-in-bottom">
+          <MobileMetricCard
+            title="Arrecadado"
+            value={statsLoading ? "..." : formatCurrency(totalArrecadado)}
+            icon="account_balance_wallet"
+            color="primary"
+            loading={statsLoading}
+          />
+          <MobileMetricCard
+            title="Alunos"
+            value={statsLoading ? "..." : String(totalAlunos)}
+            icon="school"
+            color="blue"
+            loading={statsLoading}
+          />
+          <MobileMetricCard
+            title="Rifas Vendidas"
+            value={statsLoading ? "..." : String(totalTickets)}
+            icon="confirmation_number"
+            color="purple"
+            loading={statsLoading}
+          />
+          <MobileMetricCard
+            title="Saldo Caixa"
+            value={statsLoading ? "..." : formatCurrency(saldo)}
+            icon="savings"
+            color="green"
+            loading={statsLoading}
+          />
+        </div>
+
+        {/* Meta da Formatura */}
+        <MobileCard className="animate-slide-in-bottom delay-75">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm">Meta da Formatura</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {formatCurrency(metaArrecadado)} de {formatCurrency(metaTotal)}
+              </p>
+            </div>
+            <ProgressCircle value={percentualMeta} size={72} strokeWidth={7} color="#6366f1" />
+          </div>
+          <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
+            <div
+              className="h-1.5 rounded-full gradient-primary transition-all duration-700"
+              style={{ width: `${Math.min(percentualMeta, 100)}%` }}
             />
           </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 text-right">
+            Restante: {formatCurrency(metaTotal - metaArrecadado)}
+          </p>
+        </MobileCard>
 
-          {/* Charts Section - 2 columns */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Monthly Revenue Chart */}
-            <div className="lg:col-span-2 bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm">
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h4 className="font-bold text-slate-800 dark:text-slate-100">Receita Mensal</h4>
-                  <p className="text-xs text-slate-400 font-medium">Fluxo de caixa 2026</p>
-                </div>
-                <select className="text-xs font-semibold border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 rounded-lg py-1.5 px-3 focus:ring-[#0F3B7A] ring-offset-2">
-                  <option>Últimos 6 meses</option>
-                  <option>Ano 2026</option>
-                </select>
-              </div>
-              <div className="flex items-end justify-between h-64 gap-4 pt-4">
-                {meses.map((mes: string, i: number) => (
-                  <div key={mes} className="flex-1 flex flex-col items-center gap-3 group">
-                    <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-t relative flex items-end overflow-hidden h-full">
-                      <div 
-                        className={`w-full ${i === mesAtual ? 'bg-[#0F3B7A]' : 'bg-[#0F3B7A]/30 group-hover:bg-[#0F3B7A]'} transition-all duration-300`} 
-                        style={{ height: `${valores[i]}%` }}
-                      />
-                    </div>
-                    <span className={`text-[10px] font-bold ${i === mesAtual ? 'text-slate-900 dark:text-white' : 'text-slate-400'} uppercase`}>
-                      {mes}
-                    </span>
+        {/* Gráfico Mensal */}
+        <MobileCard className="animate-slide-in-bottom delay-150">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white text-sm">Receita Mensal</h3>
+              <p className="text-xs text-slate-400">Fluxo de caixa 2026</p>
+            </div>
+            <span className="badge-info text-xs">2026</span>
+          </div>
+          <div className="flex items-end gap-1.5 h-28">
+            {meses.map((mes: string, i: number) => {
+              const height = maxValor > 0 ? (valores[i] / maxValor) * 100 : 0;
+              return (
+                <div key={mes} className="flex-1 flex flex-col items-center gap-1.5">
+                  <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-t-lg overflow-hidden flex items-end" style={{ height: "88px" }}>
+                    <div
+                      className={`w-full rounded-t-lg transition-all duration-500 ${
+                        i === mesAtual ? "gradient-primary" : "bg-indigo-200 dark:bg-indigo-900/40"
+                      }`}
+                      style={{ height: `${Math.max(height, 4)}%` }}
+                    />
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Graduation Goal Chart */}
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center">
-              <div className="w-full mb-6">
-                <h4 className="font-bold text-slate-800 dark:text-slate-100">Meta da Formatura</h4>
-                <p className="text-xs text-slate-400 font-medium">Objetivo de arrecadação</p>
-              </div>
-              <div className="relative size-48 flex items-center justify-center mb-8">
-                <svg className="size-full transform -rotate-90">
-                  <circle 
-                    className="text-slate-100 dark:text-slate-800" 
-                    cx="50%" cy="50%" fill="transparent" r="42%" 
-                    stroke="currentColor" strokeWidth="12"
-                  />
-                  <circle 
-                    className="text-[#0F3B7A]" 
-                    cx="50%" cy="50%" fill="transparent" r="42%" 
-                    stroke="currentColor" 
-                    strokeDasharray="264" 
-                    strokeDashoffset={264 * (1 - percentualMeta / 100)} 
-                    strokeLinecap="round" 
-                    strokeWidth="12"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-3xl font-bold text-slate-800 dark:text-white">{percentualMeta}%</span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Arrecadado</span>
+                  <span className={`text-[9px] font-bold uppercase ${
+                    i === mesAtual ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400"
+                  }`}>
+                    {mes}
+                  </span>
                 </div>
-              </div>
-              <div className="w-full space-y-4">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500 font-medium">Meta Total</span>
-                  <span className="font-bold">{fmt(metaTotal)}</span>
-                </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500 font-medium">Arrecadado</span>
-                  <span className="text-[#0F3B7A] font-bold">{fmt(metaArrecadado)}</span>
-                </div>
-                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-center text-xs text-slate-400 italic">
-                    Restante: {fmt(restante)}
-                  </p>
-                </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
+        </MobileCard>
 
-          {/* Recent Payments Table */}
-          <div className="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
-              <div>
-                <h4 className="font-bold text-slate-800 dark:text-slate-100">Pagamentos Recentes</h4>
-                <p className="text-xs text-slate-400 font-medium">Histórico de transações em tempo real</p>
-              </div>
-              <a href="/admin/pagamentos" className="text-[#0F3B7A] text-xs font-bold uppercase tracking-wide hover:underline transition-all">
-                Ver todos
-              </a>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 dark:bg-slate-800/50">
-                    {["Aluno", "Valor", "Data", "Status", ""].map(h => (
-                      <th key={h} className="px-6 py-3.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {pagamentosLoading ? (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">
-                        Carregando pagamentos...
-                      </td>
-                    </tr>
-                  ) : pagamentos && pagamentos.length > 0 ? (
-                    pagamentos.map((row: any, idx: number) => (
-                      <tr key={row.id || idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="size-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-700 dark:text-slate-300">
-                              {row.alunoNome?.charAt(0) || "A"}
-                            </div>
-                            <span className="text-sm font-semibold text-slate-900 dark:text-white">{row.alunoNome || "Aluno"}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm font-medium text-slate-900 dark:text-white">
-                          {fmt(parseFloat(row.valor || "0"))}
-                        </td>
-                        <td className="px-6 py-4 text-xs text-slate-500 font-medium">
-                          {row.data ? new Date(row.data).toLocaleDateString("pt-BR") : "—"}
-                        </td>
-                        <td className="px-6 py-4">
-                          {statusBadge(row.status || "pending")}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button className="text-slate-400 hover:text-[#0F3B7A] transition-colors">
-                            <span className="material-symbols-outlined text-lg">more_horiz</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">
-                        Nenhum pagamento registrado ainda.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+        {/* Ações Rápidas */}
+        <div className="animate-slide-in-bottom delay-150">
+          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">
+            Ações Rápidas
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              { icon: "person_add", label: "Aluno", to: "/admin/alunos", color: "bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400" },
+              { icon: "confirmation_number", label: "Rifa", to: "/admin/rifas", color: "bg-purple-100 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400" },
+              { icon: "payments", label: "Pag.", to: "/admin/pagamentos", color: "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400" },
+              { icon: "flag", label: "Meta", to: "/admin/metas", color: "bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400" },
+            ].map((a) => (
+              <Link key={a.to} to={a.to} className="flex flex-col items-center gap-1.5 group">
+                <div className={`size-12 rounded-2xl flex items-center justify-center ${a.color} group-active:scale-95 transition-transform`}>
+                  <span className="material-symbols-outlined text-xl">{a.icon}</span>
+                </div>
+                <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">{a.label}</span>
+              </Link>
+            ))}
           </div>
         </div>
-      </main>
-    </div>
+
+        {/* Pagamentos Recentes */}
+        <div className="animate-slide-in-bottom delay-200">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+              Pagamentos Recentes
+            </p>
+            <Link to="/admin/pagamentos" className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">
+              Ver todos
+            </Link>
+          </div>
+
+          {pagamentosLoading ? (
+            <div className="space-y-2">
+              {[1,2,3].map((i) => (
+                <div key={i} className="mobile-card p-3 flex items-center gap-3">
+                  <div className="skeleton size-9 rounded-full" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="skeleton h-3.5 w-28" />
+                    <div className="skeleton h-3 w-20" />
+                  </div>
+                  <div className="skeleton h-5 w-14 rounded-full" />
+                </div>
+              ))}
+            </div>
+          ) : pagamentos && pagamentos.length > 0 ? (
+            <div className="space-y-2">
+              {pagamentos.map((row: any, idx: number) => (
+                <div key={row.id || idx} className="mobile-list-item">
+                  <MobileAvatar name={row.alunoNome || "A"} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                      {row.alunoNome || "Aluno"}
+                    </p>
+                    <p className="text-xs text-slate-500">{formatDate(row.data)}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">
+                      {formatCurrency(parseFloat(row.valor || "0"))}
+                    </span>
+                    <MobileBadge
+                      variant={row.status === "pago" || row.status === "completed" ? "success" : row.status === "pendente" || row.status === "pending" ? "warning" : "danger"}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <MobileCard className="text-center py-8">
+              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-4xl">receipt_long</span>
+              <p className="text-sm text-slate-400 mt-2">Nenhum pagamento registrado</p>
+            </MobileCard>
+          )}
+        </div>
+      </div>
+    </MobileLayout>
   );
 }

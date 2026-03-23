@@ -75,7 +75,7 @@ router.post("/", requireAdmin, async (req, res) => {
       nome, 
       premio, 
       preco: preco.toString(),
-      totalNumeros: totalNumeros || 200, // Adicionar campo totalNumeros
+      totalNumeros: totalNumeros || 200,
       salaId,
       status: "ativa"
     });
@@ -117,26 +117,36 @@ router.put("/:id", requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/rifas/:id - Deletar rifa
+// DELETE /api/rifas/:id - Deletar rifa (CORRIGIDO)
 router.delete("/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const salaId = req.session.salaId;
+    
+    console.log(`[DELETE] Tentando deletar rifa ID: ${id}, salaId da sessão: ${salaId}`);
 
     const rifaExistente = await getRifaById(id);
     if (!rifaExistente) {
+      console.log(`[DELETE] Rifa ${id} não encontrada`);
       return res.status(404).json({ message: "Rifa não encontrada" });
     }
 
+    console.log(`[DELETE] Rifa encontrada, nome: ${rifaExistente.nome}, salaId da rifa: ${rifaExistente.salaId}`);
+
     if (rifaExistente.salaId !== salaId) {
+      console.log(`[DELETE] Acesso negado: salaId da rifa (${rifaExistente.salaId}) != salaId da sessão (${salaId})`);
       return res.status(403).json({ message: "Acesso negado" });
     }
 
+    // Deletar todos os tickets associados primeiro
     await deleteRifa(id);
+    console.log(`[DELETE] Rifa ${id} deletada com sucesso`);
+    
+    // Retornar 204 No Content para sucesso sem corpo
     res.status(204).send();
   } catch (error: any) {
     console.error("Erro ao deletar rifa:", error);
-    res.status(500).json({ message: error.message || "Erro interno" });
+    res.status(500).json({ message: error.message || "Erro interno ao deletar rifa" });
   }
 });
 
@@ -189,7 +199,7 @@ router.post("/:id/tickets", requireAuth, async (req, res) => {
       compradorNome,
       compradorContato: compradorContato || null,
       valor: valor.toString(),
-      numero, // Adicionar número do ticket
+      numero,
       status: "pendente"
     });
     
@@ -226,17 +236,20 @@ router.put("/tickets/:id", requireAdmin, async (req, res) => {
   }
 });
 
-// PATCH /api/rifas/tickets/:id - Atualizar apenas status do ticket
+// PATCH /api/rifas/tickets/:id
 router.patch("/tickets/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { status } = req.body;
+    
+    console.log(`[PATCH] Atualizando ticket ${id} para status: ${status}`);
 
     if (!status) {
       return res.status(400).json({ message: "Status é obrigatório" });
     }
 
     const ticketAtualizado = await updateTicket(id, status);
+    console.log(`[PATCH] Ticket ${id} atualizado com sucesso`);
     res.json(ticketAtualizado);
   } catch (error: any) {
     console.error("Erro ao atualizar ticket:", error);
@@ -288,7 +301,6 @@ router.post("/:id/sortear", requireAdmin, async (req, res) => {
     const indiceSorteado = Math.floor(Math.random() * ticketsPagos.length);
     const vencedor = ticketsPagos[indiceSorteado];
     
-    // Verificações rigorosas para garantir que todos os dados necessários existem
     if (!vencedor) {
       return res.status(400).json({ message: "Erro ao selecionar vencedor" });
     }
@@ -301,7 +313,6 @@ router.post("/:id/sortear", requireAdmin, async (req, res) => {
       return res.status(400).json({ message: "Vencedor não possui número associado" });
     }
 
-    // Agora o TypeScript sabe que vencedor.vendedorId e vencedor.numero são definidos
     const rifaAtualizada = await marcarRifaComoSorteada(
       id, 
       vencedor.vendedorId, 

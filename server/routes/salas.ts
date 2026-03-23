@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createSala, getSalaById } from "../storage.js";
+import { createSala, getSalaById, updateUser } from "../storage.js";
 import { db } from "../db.js";
 import { chaves, salas } from "../../shared/schema.js";
 import { eq } from "drizzle-orm";
@@ -47,6 +47,9 @@ router.post("/", async (req, res) => {
       metaValor: parseFloat(metaValor) || 0,
       senha: senha,
     });
+
+    // Vincular o admin à sala criada
+    await updateUser(req.session.userId, { salaId: sala.id });    
 
     // Atualizar salaId na sessão do admin
     req.session.salaId = sala.id;

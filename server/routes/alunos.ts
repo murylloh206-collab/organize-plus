@@ -15,10 +15,8 @@ const router = Router();
 router.get("/", requireAdmin, async (req, res) => {
   try {
     const alunos = await getAlunosBySala(req.session.salaId!);
-    res.json(alunos.map(u => { 
-      const { senhaHash: _, ...safe } = u; 
-      return safe; 
-    }));
+    // Remover campos sensíveis (senhaHash não existe mais no tipo retornado)
+    res.json(alunos);
   } catch (error) {
     console.error("Erro ao buscar alunos:", error);
     res.status(500).json({ message: "Erro interno" });
@@ -30,7 +28,8 @@ router.get("/me", requireAuth, async (req, res) => {
   try {
     const user = await getUserById(req.session.userId!);
     if (!user) return res.status(404).json({ message: "Usuário não encontrado" });
-    const { senhaHash: _, ...safe } = user;
+    // Remover campos sensíveis se existirem
+    const { senhaHash, ...safe } = user as any;
     res.json(safe);
   } catch (error) {
     console.error("Erro ao buscar usuário:", error);
@@ -53,7 +52,7 @@ router.get("/:id", requireAdmin, async (req, res) => {
       return res.status(403).json({ message: "Acesso negado" });
     }
     
-    const { senhaHash: _, ...safe } = aluno;
+    const { senhaHash, ...safe } = aluno as any;
     res.json(safe);
   } catch (error) {
     console.error("Erro ao buscar aluno:", error);
@@ -90,7 +89,7 @@ router.post("/", requireAdmin, async (req, res) => {
       salaId: req.session.salaId! 
     });
     
-    const { senhaHash: _, ...safe } = aluno;
+    const { senhaHash, ...safe } = aluno as any;
     res.status(201).json(safe);
   } catch (e: any) {
     console.error("Erro ao criar aluno:", e);
@@ -116,7 +115,7 @@ router.put("/:id", requireAdmin, async (req, res) => {
     }
     
     const alunoAtualizado = await updateUser(id, { nome, email, celular });
-    const { senhaHash: _, ...safe } = alunoAtualizado;
+    const { senhaHash, ...safe } = alunoAtualizado as any;
     
     res.json(safe);
   } catch (error) {

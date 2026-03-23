@@ -32,6 +32,7 @@ export const usuarios = pgTable("usuarios", {
   role: roleEnum("role").default("aluno").notNull(),
   avatarUrl: text("avatar_url"),
   createdAt: timestamp("created_at").defaultNow(),
+  valorArrecadadoRifas: decimal("valor_arrecadado_rifas", { precision: 12, scale: 2 }).default("0"),
 });
 
 // ---------- CHAVES ----------
@@ -59,6 +60,11 @@ export const rifas = pgTable("rifas", {
   status: statusRifaEnum("status").default("ativa").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  sorteiosRealizados: integer("sorteios_realizados").default(0),
+  ultimoVencedorId: integer("ultimo_vencedor_id").references(() => usuarios.id),
+  ultimoNumeroSorteado: integer("ultimo_numero_sorteado"),
+  ultimoSorteio: timestamp("ultimo_sorteio"),
+  valorArrecadado: decimal("valor_arrecadado", { precision: 12, scale: 2 }).default("0"),
 });
 
 // ---------- TICKETS RIFA ----------

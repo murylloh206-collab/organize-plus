@@ -22,6 +22,23 @@ export async function verificarSenha(senha: string, hash: string) {
   return bcrypt.compare(senha, hash);
 }
 
+// Função para carregar dados do usuário na sessão
+export async function carregarUsuarioSessao(req: Request, userId: number) {
+  const [user] = await db
+    .select()
+    .from(usuarios)
+    .where(eq(usuarios.id, userId))
+    .limit(1);
+  
+  if (user) {
+    req.session.userId = user.id;
+    req.session.userRole = user.role;
+    req.session.salaId = user.salaId;
+    return true;
+  }
+  return false;
+}
+
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session?.userId) {
     return res.status(401).json({ message: "Não autorizado" });

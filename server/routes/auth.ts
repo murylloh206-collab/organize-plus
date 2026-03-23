@@ -4,32 +4,52 @@ import {
   getUserByEmail, createUser, getSalaById, createSala,
   getChaveByCode, marcarChaveUsada,
 } from "../storage.js";
-import { verificarSenha, validarChave } from "../auth.js";
+import { verificarSenha, validarChave, carregarUsuarioSessao } from "../auth.js"; // <-- ADICIONAR AQUI
 
 const router = Router();
 
 // GET /api/auth/me
 router.get("/me", async (req, res) => {
   if (!req.session?.userId) return res.status(401).json({ message: "Não autenticado" });
+  
+  // Buscar dados completos do usuário
   const user = await getUserByEmail("").catch(() => null);
-  res.json({ userId: req.session.userId, role: req.session.userRole, salaId: req.session.salaId });
+  
+  // Tentar carregar dados atualizados na sessão
+  if (req.session.userId) {
+    await carregarUsuarioSessao(req, req.session.userId);
+  }
+  
+  res.json({ 
+    userId: req.session.userId, 
+    role: req.session.userRole, 
+    salaId: req.session.salaId 
+  });
 });
 
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
-    const { email, senha } = loginSchema.parse(req.body);
+    const { email, senha } = req.body;
+    
     const user = await getUserByEmail(email);
-    if (!user) return res.status(400).json({ message: "Email ou senha inválidos" });
-    const ok = await verificarSenha(senha, user.senhaHash);
-    if (!ok) return res.status(400).json({ message: "Email ou senha inválidos" });
-    req.session.userId = user.id;
-    req.session.userRole = user.role;
-    req.session.salaId = user.salaId ?? null;
-    const { senhaHash: _, ...userSafe } = user;
-    res.json({ user: userSafe });
-  } catch (e: any) {
-    res.status(400).json({ message: e.message });
+    if (!user) {
+      return res.status(401).json({ message: "Credenciais inválidas" });
+    }
+    
+    const senhaValida = await verificarSenha(senha, user.senhaHash);
+    if (!senhaValida) {
+      return res.status(401).json({ message: "Credenciais inválidas" });
+    }
+    
+    // Usar a função para carregar todos os dados do usuário na sessão
+    await carregarUsuarioSessao(req, user.id);
+    
+    const { senhaHash: _, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (error) {
+    console.error("Erro no login:", error);
+    res.status(500).json({ message: "Erro interno" });
   }
 });
 
@@ -66,9 +86,8 @@ router.post("/register", async (req, res) => {
     // Marcar chave como usada
     await marcarChaveUsada(chaveRegistro.id, user.id);
 
-    req.session.userId = user.id;
-    req.session.userRole = user.role;
-    req.session.salaId = salaId ?? null;
+    // Carregar dados na sessão
+    await carregarUsuarioSessao(req, user.id);
 
     const { senhaHash: _, ...userSafe } = user;
     res.json({ user: userSafe, tipo: "premium" });
@@ -90,9 +109,8 @@ router.post("/register-comissao", async (req, res) => {
 
     const user = await createUser({ nome, email, senha, role: "admin", salaId: undefined });
 
-    req.session.userId = user.id;
-    req.session.userRole = user.role;
-    req.session.salaId = null;
+    // Carregar dados na sessão
+    await carregarUsuarioSessao(req, user.id);
 
     const { senhaHash: _, ...userSafe } = user;
     res.status(201).json({ user: userSafe });
@@ -142,10 +160,8 @@ router.post("/register-aluno", async (req, res) => {
       salaId: parseInt(turmaId)
     });
     
-    // Criar sessão local do express
-    req.session.userId = user.id;
-    req.session.userRole = "aluno";
-    req.session.salaId = user.salaId ?? null;
+    // Carregar dados na sessão
+    await carregarUsuarioSessao(req, user.id);
     
     const { senhaHash: _, ...userSafe } = user;
     res.status(201).json({ user: userSafe });

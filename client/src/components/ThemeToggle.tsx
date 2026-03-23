@@ -1,11 +1,22 @@
 import { useDarkMode } from "../hooks/useDarkMode";
 
-export default function ThemeToggle() {
+interface ThemeToggleProps {
+  variant?: "default" | "gradient" | "gold";
+}
+
+export default function ThemeToggle({ variant = "default" }: ThemeToggleProps) {
   const { isDark, toggle } = useDarkMode();
+
+  const getClassName = () => {
+    if (variant === "gradient") return "theme-toggle-gradient";
+    if (variant === "gold") return "theme-toggle-gold";
+    return "theme-toggle";
+  };
+
   return (
     <button
       onClick={toggle}
-      className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+      className={getClassName()}
       aria-label="Alternar modo escuro"
     >
       <span className="material-symbols-outlined text-[20px]">

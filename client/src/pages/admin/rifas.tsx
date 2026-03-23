@@ -1,10 +1,19 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Sidebar from "../../components/layout/Sidebar";
-import Header from "../../components/layout/Header";
+import MobileLayout from "../../components/layout/MobileLayout";
+import MobileHeader from "../../components/layout/MobileHeader";
+import MobileCard from "../../components/ui/MobileCard";
+import MobileMetricCard from "../../components/ui/MobileMetricCard";
+import MobileButton from "../../components/ui/MobileButton";
+import MobileInput from "../../components/ui/MobileInput";
+import MobileBadge from "../../components/ui/MobileBadge";
+import BottomSheet from "../../components/ui/BottomSheet";
+import Skeleton from "../../components/ui/Skeleton";
+import { useBottomSheet } from "../../hooks/useBottomSheet";
 import { apiRequest } from "../../lib/queryClient";
-import html2canvas from "html2canvas";
 import { useAuth } from "../../hooks/useAuth";
+import { formatCurrency } from "../../components/shared/CurrencyFormat";
+import html2canvas from "html2canvas";
 
 interface Ticket {
   id: number;
@@ -14,7 +23,6 @@ interface Ticket {
   valor: number;
   status: "pendente" | "pago" | "cancelado";
   vendedorId: number;
-  vendedorNome?: string;
   rifaId: number;
 }
 
@@ -29,1091 +37,465 @@ interface Sorteio {
   totalNumeros: number;
 }
 
-interface Aluno {
-  id: number;
-  nome: string;
-  email: string;
-}
+interface Aluno { id: number; nome: string; }
 
-export default function AdminSorteios() {
+export default function AdminRifas() {
   const qc = useQueryClient();
   const { auth } = useAuth();
   const resultadoRef = useRef<HTMLDivElement>(null);
-  
-  const [showForm, setShowForm] = useState(false);
-  const [showSorteioModal, setShowSorteioModal] = useState(false);
-  const [showResultadoModal, setShowResultadoModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showTicketModal, setShowTicketModal] = useState(false);
-  const [showEditVendaModal, setShowEditVendaModal] = useState(false);
-  const [sorteioSelecionado, setSorteioSelecionado] = useState<Sorteio | null>(null);
+
+  const criarSheet    = useBottomSheet();
+  const editSheet     = useBottomSheet();
+  const vendaSheet    = useBottomSheet();
+  const editVendaSheet = useBottomSheet();
+  const sorteioSheet  = useBottomSheet();
+  const resultSheet   = useBottomSheet();
+
   const [sorteioExpandido, setSorteioExpandido] = useState<number | null>(null);
+  const [sorteioSelecionado, setSorteioSelecionado] = useState<Sorteio | null>(null);
   const [sorteioEditando, setSorteioEditando] = useState<Sorteio | null>(null);
   const [ticketSelecionado, setTicketSelecionado] = useState<Ticket | null>(null);
+  const [vendaNumero, setVendaNumero] = useState<number | null>(null);
   const [numeroSorteado, setNumeroSorteado] = useState<number | null>(null);
   const [vencedorInfo, setVencedorInfo] = useState<Ticket | null>(null);
-  const [isResorteio, setIsResorteio] = useState(false);
-  
-  // Estados do formulário de criação de sorteio
+  const [sorteando, setSorteando] = useState<number | null>(null);
+  const [error, setError] = useState("");
+
+  // Criar sorteio
   const [nome, setNome] = useState("");
   const [premio, setPremio] = useState("");
   const [preco, setPreco] = useState("");
   const [totalNumeros, setTotalNumeros] = useState("200");
   const [dataSorteio, setDataSorteio] = useState("");
-  const [error, setError] = useState("");
-  
-  // Estados do formulário de edição de sorteio
+
+  // Editar sorteio
   const [editNome, setEditNome] = useState("");
   const [editPremio, setEditPremio] = useState("");
   const [editPreco, setEditPreco] = useState("");
   const [editTotalNumeros, setEditTotalNumeros] = useState("");
   const [editDataSorteio, setEditDataSorteio] = useState("");
-  const [editError, setEditError] = useState("");
 
-  // Estados do formulário de venda
-  const [vendaNumero, setVendaNumero] = useState<number | null>(null);
+  // Venda
   const [vendaCompradorNome, setVendaCompradorNome] = useState("");
   const [vendaCompradorContato, setVendaCompradorContato] = useState("");
   const [vendaVendedorId, setVendaVendedorId] = useState<number | null>(null);
   const [vendaValor, setVendaValor] = useState("");
   const [vendaError, setVendaError] = useState("");
 
-  // Estados para edição de venda
+  // Editar venda
   const [editVendaCompradorNome, setEditVendaCompradorNome] = useState("");
   const [editVendaCompradorContato, setEditVendaCompradorContato] = useState("");
   const [editVendaVendedorId, setEditVendaVendedorId] = useState<number | null>(null);
   const [editVendaValor, setEditVendaValor] = useState("");
   const [editVendaStatus, setEditVendaStatus] = useState<"pago" | "pendente" | "cancelado">("pendente");
-  const [editVendaError, setEditVendaError] = useState("");
 
-  const [sorteando, setSorteando] = useState<number | null>(null);
-
-  // Buscar sorteios
-  const { data: sorteios = [], isLoading, refetch: refetchSorteios } = useQuery<Sorteio[]>({ 
-    queryKey: ["sorteios"], 
-    queryFn: () => apiRequest("GET", "/rifas")
+  const { data: sorteios = [], isLoading, refetch: refetchSorteios } = useQuery<Sorteio[]>({
+    queryKey: ["sorteios"],
+    queryFn: () => apiRequest("GET", "/rifas"),
   });
 
-  // Buscar tickets do sorteio selecionado
   const { data: tickets = [], refetch: refetchTickets } = useQuery<Ticket[]>({
     queryKey: ["tickets", sorteioExpandido],
     queryFn: () => sorteioExpandido ? apiRequest("GET", `/rifas/${sorteioExpandido}/tickets`) : Promise.resolve([]),
     enabled: !!sorteioExpandido,
   });
 
-  // Buscar alunos (vendedores)
   const { data: alunos = [] } = useQuery<Aluno[]>({
-    queryKey: ["alunos"],
-    queryFn: () => apiRequest("GET", "/alunos"),
+    queryKey: ["alunos", auth?.salaId],
+    queryFn: () => apiRequest("GET", `/alunos?salaId=${auth?.salaId}`),
+    enabled: !!auth?.salaId,
   });
 
-  // Mapear tickets por número
-  const ticketsPorNumero = tickets.reduce((acc: Record<number, Ticket>, ticket: Ticket) => {
-    if (ticket.numero) {
-      acc[ticket.numero] = ticket;
-    }
+  const ticketsPorNumero = tickets.reduce((acc: Record<number, Ticket>, t: Ticket) => {
+    if (t.numero) acc[t.numero] = t;
     return acc;
   }, {});
 
-  // Criar sorteio
   const criar = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/rifas", data),
-    onSuccess: () => { 
-      refetchSorteios();
-      setShowForm(false); 
-      resetForm();
-    },
+    onSuccess: () => { refetchSorteios(); criarSheet.close(); resetCriarForm(); },
     onError: (e: any) => setError(e.message),
   });
 
-  // Editar sorteio
   const editar = useMutation({
     mutationFn: ({ id, ...data }: any) => apiRequest("PUT", `/rifas/${id}`, data),
-    onSuccess: () => { 
-      refetchSorteios();
-      setShowEditModal(false); 
-      setSorteioEditando(null);
-    },
-    onError: (e: any) => setEditError(e.message),
+    onSuccess: () => { refetchSorteios(); editSheet.close(); setSorteioEditando(null); },
+    onError: (e: any) => setError(e.message),
   });
 
-  // Deletar sorteio
   const deletar = useMutation({
-    mutationFn: (id: number) => apiRequest("DELETE", `/rifas/${id}`),
-    onSuccess: () => { 
-      refetchSorteios();
+    mutationFn: async (id: number) => {
+      const r = await fetch(`/api/rifas/${id}`, { method: "DELETE", credentials: "include" });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || "Erro ao deletar");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sorteios"] });
       if (sorteioExpandido) setSorteioExpandido(null);
     },
   });
 
-  // Criar venda (ticket)
   const criarVenda = useMutation({
-    mutationFn: (data: any) => {
-      if (!sorteioExpandido) throw new Error("Nenhum sorteio selecionado");
-      return apiRequest("POST", `/rifas/${sorteioExpandido}/tickets`, data);
-    },
-    onSuccess: () => { 
-      refetchTickets();
-      setShowTicketModal(false);
-      resetVendaForm();
-    },
+    mutationFn: (data: any) => apiRequest("POST", `/rifas/${sorteioExpandido}/tickets`, data),
+    onSuccess: () => { refetchTickets(); vendaSheet.close(); resetVendaForm(); },
     onError: (e: any) => setVendaError(e.message),
   });
 
-  // Editar venda
   const editarVenda = useMutation({
     mutationFn: ({ id, ...data }: any) => apiRequest("PUT", `/rifas/tickets/${id}`, data),
-    onSuccess: () => { 
-      refetchTickets();
-      setShowEditVendaModal(false);
-      setTicketSelecionado(null);
-    },
-    onError: (e: any) => setEditVendaError(e.message),
+    onSuccess: () => { refetchTickets(); editVendaSheet.close(); setTicketSelecionado(null); },
   });
 
-  // Deletar venda
   const deletarVenda = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/rifas/tickets/${id}`),
-    onSuccess: () => { 
-      refetchTickets();
-      if (ticketSelecionado) {
-        setShowEditVendaModal(false);
-        setTicketSelecionado(null);
-      }
-    },
+    onSuccess: () => { refetchTickets(); editVendaSheet.close(); setTicketSelecionado(null); },
   });
 
-  // Sortear
   const sortear = useMutation({
     mutationFn: (id: number) => apiRequest("POST", `/rifas/${id}/sortear`, {}),
-    onSuccess: (data) => { 
+    onSuccess: (data) => {
       refetchSorteios();
       setSorteando(null);
       setNumeroSorteado(data.numeroSorteado);
       setVencedorInfo(data.vencedor);
-      setShowResultadoModal(true);
-      setIsResorteio(false);
+      sorteioSheet.close();
+      resultSheet.open();
     },
-    onError: (e: any) => { 
-      setSorteando(null); 
-      alert(e.message); 
-    },
+    onError: (e: any) => { setSorteando(null); alert(e.message); },
   });
 
-  const resetForm = () => {
-    setNome("");
-    setPremio("");
-    setPreco("");
-    setTotalNumeros("200");
-    setDataSorteio("");
-    setError("");
-  };
+  const resetCriarForm = () => { setNome(""); setPremio(""); setPreco(""); setTotalNumeros("200"); setDataSorteio(""); setError(""); };
+  const resetVendaForm = () => { setVendaCompradorNome(""); setVendaCompradorContato(""); setVendaVendedorId(null); setVendaValor(""); setVendaError(""); };
 
-  const resetVendaForm = () => {
-    setVendaNumero(null);
-    setVendaCompradorNome("");
-    setVendaCompradorContato("");
-    setVendaVendedorId(null);
-    setVendaValor("");
-    setVendaError("");
-  };
-
-  const statusBadge = (s: string) => {
-    if (s === "ativa") return <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">Ativo</span>;
-    if (s === "encerrada") return <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">Encerrado</span>;
-    return <span className="px-2 py-1 bg-rose-100 text-rose-700 rounded-full text-xs font-medium">Sorteado</span>;
-  };
-
-  const statusVendaBadge = (s: string) => {
-    if (s === "pago") return <span className="px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs font-medium">Pago</span>;
-    if (s === "pendente") return <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-medium">Pendente</span>;
-    return <span className="px-2 py-1 bg-rose-100 text-rose-700 rounded-full text-xs font-medium">Cancelado</span>;
-  };
-
-  const fmt = (v: string | number) => parseFloat(String(v)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-  const handleAbrirSorteio = (sorteio: Sorteio) => {
-    setSorteioSelecionado(sorteio);
-    setShowSorteioModal(true);
-  };
-
-  const handleIniciarSorteio = () => {
-    setShowSorteioModal(false);
-    if (sorteioSelecionado) {
-      setSorteando(sorteioSelecionado.id);
-      sortear.mutate(sorteioSelecionado.id);
-    }
-  };
-
-  const handleEdit = (sorteio: Sorteio) => {
-    setSorteioEditando(sorteio);
-    setEditNome(sorteio.nome);
-    setEditPremio(sorteio.premio);
-    setEditPreco(sorteio.preco?.toString() || "");
-    setEditTotalNumeros(sorteio.totalNumeros?.toString() || "200");
-    setEditDataSorteio(sorteio.dataSorteio || "");
-    setShowEditModal(true);
-  };
-
-  const handleDelete = (id: number) => {
-    if (window.confirm("Tem certeza que deseja excluir este sorteio?")) {
-      deletar.mutate(id);
-    }
-  };
-
-  const handleNumeroClick = (numero: number) => {
-    const ticketExistente = ticketsPorNumero[numero];
-    if (ticketExistente) {
-      // Se já existe venda, abrir modal de edição
-      setTicketSelecionado(ticketExistente);
-      setEditVendaCompradorNome(ticketExistente.compradorNome);
-      setEditVendaCompradorContato(ticketExistente.compradorContato || "");
-      setEditVendaVendedorId(ticketExistente.vendedorId);
-      setEditVendaValor(ticketExistente.valor.toString());
-      setEditVendaStatus(ticketExistente.status);
-      setShowEditVendaModal(true);
-    } else {
-      // Se não existe, abrir modal de nova venda
-      const precoSorteio = sorteios.find((s: Sorteio) => s.id === sorteioExpandido)?.preco || 0;
-      setVendaNumero(numero);
-      setVendaValor(precoSorteio.toString());
-      setShowTicketModal(true);
-    }
-  };
-
-  const handleSalvarVenda = () => {
-    if (!vendaCompradorNome || !vendaVendedorId || !vendaValor) {
-      setVendaError("Preencha todos os campos obrigatórios");
-      return;
-    }
-
-    criarVenda.mutate({
-      numero: vendaNumero,
-      compradorNome: vendaCompradorNome,
-      compradorContato: vendaCompradorContato,
-      vendedorId: vendaVendedorId,
-      valor: parseFloat(vendaValor),
-      status: "pendente"
-    });
-  };
-
-  const handleSalvarEdicaoVenda = () => {
-    if (!ticketSelecionado) return;
-    
-    if (!editVendaCompradorNome || !editVendaVendedorId || !editVendaValor) {
-      setEditVendaError("Preencha todos os campos obrigatórios");
-      return;
-    }
-
-    editarVenda.mutate({
-      id: ticketSelecionado.id,
-      compradorNome: editVendaCompradorNome,
-      compradorContato: editVendaCompradorContato,
-      vendedorId: editVendaVendedorId,
-      valor: parseFloat(editVendaValor),
-      status: editVendaStatus 
-    });
-  };
-
-  const handleExcluirVenda = () => {
-    if (!ticketSelecionado) return;
-    
-    if (window.confirm("Tem certeza que deseja excluir esta venda?")) {
-      deletarVenda.mutate(ticketSelecionado.id);
-    }
-  };
-
-  const toggleExpandSorteio = (sorteioId: number) => {
-    if (sorteioExpandido === sorteioId) {
-      setSorteioExpandido(null);
-    } else {
-      setSorteioExpandido(sorteioId);
-    }
-  };
-
-  // Função para baixar o resultado como imagem
-  const handleDownloadResultado = async () => {
-    if (!resultadoRef.current) return;
-    
-    try {
-      const canvas = await html2canvas(resultadoRef.current, {
-        scale: 2,
-        backgroundColor: '#ffffff',
-        logging: false,
-        allowTaint: true,
-        useCORS: true
-      });
-      
-      const link = document.createElement('a');
-      link.download = `sorteio-${numeroSorteado}-${new Date().getTime()}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    } catch (error) {
-      console.error('Erro ao gerar imagem:', error);
-      alert('Erro ao gerar imagem. Tente novamente.');
-    }
-  };
-
-  // Função para compartilhar
-  const handleCompartilhar = async () => {
-    if (!vencedorInfo || !numeroSorteado) return;
-    
-    const texto = `🎉 Resultado do Sorteio! 🎉\n\nNúmero sorteado: ${numeroSorteado.toString().padStart(3, '0')}\nGanhador: ${vencedorInfo.compradorNome}\nContato: ${vencedorInfo.compradorContato || 'Não informado'}\n\nParabéns ao ganhador! 🏆`;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Resultado do Sorteio',
-          text: texto,
-        });
-      } catch (error) {
-        console.log('Erro ao compartilhar:', error);
-        navigator.clipboard.writeText(texto);
-        alert('Texto copiado para a área de transferência!');
-      }
-    } else {
-      navigator.clipboard.writeText(texto);
-      alert('Texto copiado para a área de transferência!');
-    }
-  };
-
-  // Calcular estatísticas baseadas em dados reais
-  const getEstatisticas = (sorteioId: number) => {
-    const ticketsDoSorteio = tickets.filter((t: Ticket) => t.rifaId === sorteioId);
-    const numerosVendidos = ticketsDoSorteio.filter((t: Ticket) => t.status === "pago").length;
-    const numerosReservados = ticketsDoSorteio.filter((t: Ticket) => t.status === "pendente").length;
-    const totalVendidos = numerosVendidos + numerosReservados;
-    const sorteio = sorteios.find((s: Sorteio) => s.id === sorteioId);
-    const totalNumeros = sorteio?.totalNumeros || 200;
-    const percentual = totalNumeros > 0 ? (numerosVendidos / totalNumeros) * 100 : 0;
-    const receitaTotal = ticketsDoSorteio
-      .filter((t: Ticket) => t.status === "pago")
-      .reduce((sum: number, t: Ticket) => sum + t.valor, 0);
-
+  const getEstatisticas = (s: Sorteio) => {
+    const ts = tickets.filter((t: Ticket) => t.rifaId === s.id);
+    const pagos = ts.filter((t: Ticket) => t.status === "pago");
+    const pendentes = ts.filter((t: Ticket) => t.status === "pendente");
+    const totalNum = s.totalNumeros || 200;
     return {
-      totalNumeros,
-      numerosVendidos,
-      numerosReservados,
-      totalVendidos,
-      percentual,
-      receitaTotal
+      totalNumeros: totalNum,
+      numerosVendidos: pagos.length,
+      numerosReservados: pendentes.length,
+      percentual: (pagos.length / totalNum) * 100,
+      receitaTotal: pagos.reduce((a: number, t: Ticket) => a + t.valor, 0),
     };
   };
 
+  const handleNumeroClick = (numero: number) => {
+    const t = ticketsPorNumero[numero];
+    if (t) {
+      setTicketSelecionado(t);
+      setEditVendaCompradorNome(t.compradorNome);
+      setEditVendaCompradorContato(t.compradorContato || "");
+      setEditVendaVendedorId(t.vendedorId);
+      setEditVendaValor(t.valor.toString());
+      setEditVendaStatus(t.status);
+      editVendaSheet.open();
+    } else {
+      const s = sorteios.find((s: Sorteio) => s.id === sorteioExpandido);
+      setVendaNumero(numero);
+      setVendaValor(s?.preco?.toString() || "");
+      vendaSheet.open();
+    }
+  };
+
+  const handleDownloadResultado = async () => {
+    if (!resultadoRef.current) return;
+    try {
+      const canvas = await html2canvas(resultadoRef.current, { scale: 2, backgroundColor: "#fff" });
+      const link = document.createElement("a");
+      link.download = `sorteio-${numeroSorteado}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch { alert("Erro ao gerar imagem."); }
+  };
+
+  const handleCompartilhar = async () => {
+    if (!vencedorInfo || !numeroSorteado) return;
+    const texto = `🎉 Resultado do Sorteio!\n\nNúmero: ${String(numeroSorteado).padStart(3, "0")}\nGanhador: ${vencedorInfo.compradorNome}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: "Resultado do Sorteio", text: texto }); }
+      catch { navigator.clipboard.writeText(texto); }
+    } else {
+      navigator.clipboard.writeText(texto);
+      alert("Texto copiado!");
+    }
+  };
+
+  const statusRifaColor: Record<string, string> = {
+    ativa: "emerald", encerrada: "amber", sorteada: "purple",
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden bg-background-light dark:bg-background-dark">
-      <Sidebar role="admin" />
-      <main className="flex-1 flex flex-col overflow-y-auto ml-64">
-        <Header title="Sorteios" />
-        
-        <div className="p-8 space-y-6">
-          {/* Header com botão de novo sorteio */}
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-2xl font-bold text-slate-900 dark:text-white">Gerenciar Sorteios</h3>
-              <p className="text-sm text-slate-500 mt-1">{sorteios.length} sorteios encontrados</p>
-            </div>
-            <button 
-              onClick={() => setShowForm(true)} 
-              className="bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-2 shadow-sm"
-            >
-              <span className="material-symbols-outlined text-sm">add</span> 
-              Criar Sorteio
-            </button>
-          </div>
+    <MobileLayout role="admin">
+      <MobileHeader
+        title="Rifas"
+        subtitle={`${sorteios.length} sorteios`}
+        gradient
+        actions={[{ icon: "add_circle", onClick: criarSheet.open, label: "Nova rifa" }]}
+      />
 
-          {/* Modal de Novo Sorteio */}
-          {showForm && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full shadow-xl">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="text-xl font-bold text-slate-900 dark:text-white">Novo Sorteio</h4>
-                  <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600">
-                    <span className="material-symbols-outlined">close</span>
-                  </button>
-                </div>
-                
-                <div className="space-y-4">
-                  <input
-                    className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                    placeholder="Nome do sorteio"
-                    value={nome}
-                    onChange={e => setNome(e.target.value)}
-                  />
-                  <input
-                    className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                    placeholder="Prêmio"
-                    value={premio}
-                    onChange={e => setPremio(e.target.value)}
-                  />
-                  <div className="grid grid-cols-2 gap-4">
-                    <input
-                      className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                      type="number"
-                      placeholder="Preço do número (R$)"
-                      value={preco}
-                      onChange={e => setPreco(e.target.value)}
-                    />
-                    <input
-                      className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                      type="number"
-                      placeholder="Total de números"
-                      value={totalNumeros}
-                      onChange={e => setTotalNumeros(e.target.value)}
-                    />
+      <div className="px-4 py-4 space-y-3">
+        {isLoading ? (
+          <div className="space-y-3">{[1, 2].map((i) => <Skeleton key={i} variant="card" />)}</div>
+        ) : sorteios.length > 0 ? (
+          sorteios.map((s: Sorteio) => {
+            const stats = getEstatisticas(s);
+            const isExpanded = sorteioExpandido === s.id;
+            return (
+              <div key={s.id} className="mobile-card overflow-hidden">
+                {/* Header */}
+                <div
+                  className="p-4 flex items-center gap-3 cursor-pointer"
+                  onClick={() => { setSorteioExpandido(isExpanded ? null : s.id); }}
+                >
+                  <div className="size-11 rounded-2xl bg-indigo-100 dark:bg-indigo-950/40 flex items-center justify-center flex-shrink-0">
+                    <span className="material-symbols-outlined text-indigo-600 dark:text-indigo-400 text-xl">confirmation_number</span>
                   </div>
-                  <input
-                    className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                    type="date"
-                    placeholder="Data do sorteio"
-                    value={dataSorteio}
-                    onChange={e => setDataSorteio(e.target.value)}
-                  />
-                  
-                  {error && <p className="text-red-500 text-sm">{error}</p>}
-                  
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={() => criar.mutate({ 
-                        nome, 
-                        premio, 
-                        preco: parseFloat(preco), 
-                        totalNumeros: parseInt(totalNumeros),
-                        dataSorteio: dataSorteio || null,
-                        salaId: auth?.salaId,
-                        status: "ativa"
-                      })}
-                      disabled={criar.isPending}
-                      className="flex-1 bg-primary hover:bg-primary/90 text-white py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
-                    >
-                      {criar.isPending ? "Criando..." : "Criar Sorteio"}
-                    </button>
-                    <button 
-                      onClick={() => {
-                        setShowForm(false);
-                        resetForm();
-                      }} 
-                      className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                    >
-                      Cancelar
-                    </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">{s.nome}</h4>
+                      <MobileBadge variant={s.status === "ativa" ? "success" : s.status === "encerrada" ? "warning" : "danger"}>
+  {s.status === "ativa" ? "Ativa" : s.status === "encerrada" ? "Encerrada" : "Sorteada"}
+</MobileBadge>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">🎁 {s.premio} • {formatCurrency(s.preco)}/número</p>
+                  </div>
+                  <span className="material-symbols-outlined text-slate-400 flex-shrink-0">
+                    {isExpanded ? "expand_less" : "expand_more"}
+                  </span>
+                </div>
+
+                {/* Progress bar */}
+                <div className="px-4 pb-3">
+                  <div className="flex justify-between text-xs text-slate-500 mb-1">
+                    <span>{stats.numerosVendidos} pagos</span>
+                    <span>{stats.percentual.toFixed(0)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full gradient-primary rounded-full transition-all duration-500" style={{ width: `${Math.min(stats.percentual, 100)}%` }} />
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* Lista de sorteios em cards expansíveis */}
-          <div className="space-y-4">
-            {isLoading ? (
-              <div className="text-center py-12 text-slate-400">Carregando...</div>
-            ) : sorteios.length > 0 ? (
-              sorteios.map((s: Sorteio) => {
-                const stats = getEstatisticas(s.id);
-                
-                return (
-                  <div key={s.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all">
-                    {/* Card principal - sempre visível, clicável para expandir */}
-                    <div 
-                      onClick={() => toggleExpandSorteio(s.id)}
-                      className="p-6 cursor-pointer flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="size-12 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                          <span className="material-symbols-outlined text-primary text-2xl">confirmation_number</span>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-lg text-slate-900 dark:text-white">{s.nome}</h4>
-                          <p className="text-sm text-slate-500">Prêmio: {s.premio}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="text-xl font-black text-primary">{fmt(s.preco)}</p>
-                          <p className="text-xs text-slate-400">{stats.totalVendidos}/{stats.totalNumeros} vendidos</p>
-                        </div>
-                        <span className="material-symbols-outlined text-slate-400">
-                          {sorteioExpandido === s.id ? 'expand_less' : 'expand_more'}
-                        </span>
-                      </div>
+                {/* Expanded area */}
+                {isExpanded && (
+                  <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 p-4 space-y-4">
+                    {/* Stats */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <MobileMetricCard title="Vendidos" value={String(stats.numerosVendidos)} icon="check_circle" color="green" />
+                      <MobileMetricCard title="Reservados" value={String(stats.numerosReservados)} icon="pending" color="amber" />
+                      <MobileMetricCard title="Total" value={String(stats.totalNumeros)} icon="numbers" color="primary" />
+                      <MobileMetricCard title="Receita" value={formatCurrency(stats.receitaTotal)} icon="payments" color="purple" />
                     </div>
 
-                    {/* Área expansível - aparece apenas quando o card é clicado */}
-                    {sorteioExpandido === s.id && (
-                      <div className="border-t border-slate-200 dark:border-slate-800 p-6 bg-slate-50 dark:bg-slate-800/50">
-                        <div className="space-y-6">
-                          {/* Header do sorteio detalhado */}
-                          <div className="flex flex-wrap items-end justify-between gap-4">
-                            <div className="flex flex-col gap-2">
-                              <nav className="flex text-xs text-slate-500 gap-2 items-center">
-                                <span>Meus Sorteios</span>
-                                <span className="material-symbols-outlined text-[12px]">chevron_right</span>
-                                <span className="text-primary font-semibold">{s.nome}</span>
-                              </nav>
-                              <h2 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
-                                {s.nome}
-                              </h2>
-                              <p className="text-slate-500 dark:text-slate-400 max-w-lg">
-                                {s.dataSorteio ? `Sorteio agendado para ${new Date(s.dataSorteio).toLocaleDateString()}` : 'Data do sorteio a definir'}. 
-                                Gerencie os números e visualize as vendas.
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEdit(s);
-                                }}
-                                className="flex items-center justify-center gap-2 h-11 px-6 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-all"
-                              >
-                                <span className="material-symbols-outlined text-[20px]">edit</span>
-                                Editar
-                              </button>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(s.id);
-                                }}
-                                className="flex items-center justify-center gap-2 h-11 px-4 rounded-lg border border-red-100 text-red-600 hover:bg-red-50 transition-all"
-                              >
-                                <span className="material-symbols-outlined text-[20px]">delete</span>
-                              </button>
-                              {s.status === "ativa" && (
-                                <button 
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleAbrirSorteio(s);
-                                  }}
-                                  disabled={sorteando === s.id}
-                                  className="flex items-center justify-center gap-2 h-11 px-8 rounded-lg bg-primary text-white text-sm font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
-                                >
-                                  <span className="material-symbols-outlined text-[20px]">celebration</span>
-                                  {sorteando === s.id ? "Sorteando..." : "Sortear Agora"}
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                      <MobileButton variant="secondary" size="sm" icon="edit" onClick={() => {
+                        setSorteioEditando(s); setEditNome(s.nome); setEditPremio(s.premio);
+                        setEditPreco(s.preco?.toString() || ""); setEditTotalNumeros(s.totalNumeros?.toString() || "200");
+                        setEditDataSorteio(s.dataSorteio || ""); editSheet.open();
+                      }}>Editar</MobileButton>
+                      {s.status === "ativa" && (
+                        <MobileButton variant="primary" size="sm" icon="celebration" loading={sorteando === s.id}
+                          onClick={() => { setSorteioSelecionado(s); sorteioSheet.open(); }}>
+                          Sortear
+                        </MobileButton>
+                      )}
+                      <MobileButton variant="danger" size="sm" icon="delete"
+                        onClick={() => { if (confirm("Excluir sorteio?")) deletar.mutate(s.id); }}>
+                        Excluir
+                      </MobileButton>
+                    </div>
 
-                          {/* Stats Cards com dados reais */}
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                              <div className="flex justify-between items-start mb-4">
-                                <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                                  <span className="material-symbols-outlined text-slate-600 dark:text-slate-400">numbers</span>
-                                </div>
-                                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Total</span>
-                              </div>
-                              <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.totalNumeros}</p>
-                              <p className="text-sm text-slate-500 mt-1">Números disponíveis</p>
-                            </div>
-                            
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                              <div className="flex justify-between items-start mb-4">
-                                <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-green-600">
-                                  <span className="material-symbols-outlined">check_circle</span>
-                                </div>
-                                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Vendidos</span>
-                              </div>
-                              <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                                {stats.numerosVendidos} <span className="text-sm font-normal text-green-600 ml-1">{stats.percentual.toFixed(0)}%</span>
-                              </p>
-                              <p className="text-sm text-slate-500 mt-1">Números pagos</p>
-                            </div>
-
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                              <div className="flex justify-between items-start mb-4">
-                                <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-600">
-                                  <span className="material-symbols-outlined">pending</span>
-                                </div>
-                                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Reservados</span>
-                              </div>
-                              <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.numerosReservados}</p>
-                              <p className="text-sm text-slate-500 mt-1">Aguardando pagamento</p>
-                            </div>
-                            
-                            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                              <div className="flex justify-between items-start mb-4">
-                                <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-primary">
-                                  <span className="material-symbols-outlined">payments</span>
-                                </div>
-                                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Receita</span>
-                              </div>
-                              <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                                {fmt(stats.receitaTotal)}
-                              </p>
-                              <p className="text-sm text-slate-500 mt-1">Total arrecadado</p>
-                            </div>
-                          </div>
-
-                          {/* Mapa de Números */}
-                          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-4">
-                              <h3 className="text-lg font-bold">Mapa de Números</h3>
-                              <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-2">
-                                  <div className="size-3 rounded-full bg-green-500"></div>
-                                  <span className="text-xs text-slate-600 dark:text-slate-400">Pago</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <div className="size-3 rounded-full bg-amber-400"></div>
-                                  <span className="text-xs text-slate-600 dark:text-slate-400">Pendente</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <div className="size-3 rounded-full border border-slate-300 dark:border-slate-600 bg-transparent"></div>
-                                  <span className="text-xs text-slate-600 dark:text-slate-400">Disponível</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="p-8">
-                              <div className="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-15 lg:grid-cols-20 gap-3">
-                                {Array.from({ length: stats.totalNumeros }, (_, i) => {
-                                  const numero = i + 1;
-                                  const ticket = ticketsPorNumero[numero];
-                                  let bgColor = "border border-slate-300 dark:border-slate-700 hover:border-primary hover:text-primary cursor-pointer";
-                                  
-                                  if (ticket) {
-                                    if (ticket.status === "pago") {
-                                      bgColor = "bg-green-500 text-white cursor-pointer hover:bg-green-600";
-                                    } else if (ticket.status === "pendente") {
-                                      bgColor = "bg-amber-400 text-amber-900 cursor-pointer hover:bg-amber-500";
-                                    }
-                                  }
-
-                                  return (
-                                    <div
-                                      key={i}
-                                      onClick={() => handleNumeroClick(numero)}
-                                      className={`aspect-square flex items-center justify-center rounded-lg text-xs font-medium transition-colors ${bgColor}`}
-                                    >
-                                      {numero.toString().padStart(3, '0')}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
+                    {/* Mapa de Números */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Mapa de Números</p>
+                        <div className="flex gap-2 text-[10px] text-slate-400">
+                          <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-emerald-500 inline-block" />Pago</span>
+                          <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-amber-400 inline-block" />Pendente</span>
                         </div>
                       </div>
-                    )}
+                      <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(10, s.totalNumeros)}, 1fr)` }}>
+                        {Array.from({ length: s.totalNumeros }, (_, i) => {
+                          const n = i + 1;
+                          const t = ticketsPorNumero[n];
+                          const bg = t?.status === "pago" ? "bg-emerald-500 text-white" : t?.status === "pendente" ? "bg-amber-400 text-amber-900" : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400";
+                          return (
+                            <button key={i} onClick={() => handleNumeroClick(n)}
+                              className={`aspect-square flex items-center justify-center rounded text-[9px] font-semibold transition-all active:scale-95 ${bg}`}>
+                              {n}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
-                );
-              })
-            ) : (
-              <div className="text-center py-12 text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl">
-                Nenhum sorteio criado ainda.
+                )}
               </div>
+            );
+          })
+        ) : (
+          <MobileCard className="text-center py-12">
+            <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-5xl">confirmation_number</span>
+            <p className="text-slate-500 mt-3 text-sm">Nenhum sorteio criado</p>
+            <MobileButton variant="ghost" size="sm" icon="add_circle" className="mt-3" onClick={criarSheet.open}>
+              Criar sorteio
+            </MobileButton>
+          </MobileCard>
+        )}
+      </div>
+
+      {/* Bottom Sheet: Criar Sorteio */}
+      <BottomSheet isOpen={criarSheet.isOpen} onClose={criarSheet.close} title="Novo Sorteio">
+        <div className="space-y-4">
+          <MobileInput label="Nome do Sorteio" icon="confirmation_number" placeholder="ex: Rifa de Natal" value={nome} onChange={(e) => setNome(e.target.value)} />
+          <MobileInput label="Prêmio" icon="emoji_events" placeholder="ex: Smart TV 55&quot;" value={premio} onChange={(e) => setPremio(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <MobileInput label="Preço/número (R$)" icon="attach_money" type="number" placeholder="0.00" value={preco} onChange={(e) => setPreco(e.target.value)} />
+            <MobileInput label="Total de números" icon="numbers" type="number" placeholder="200" value={totalNumeros} onChange={(e) => setTotalNumeros(e.target.value)} />
+          </div>
+          <MobileInput label="Data do Sorteio" icon="event" type="date" value={dataSorteio} onChange={(e) => setDataSorteio(e.target.value)} />
+          {error && <p className="text-sm text-red-500">{error}</p>}
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <MobileButton variant="secondary" fullWidth onClick={criarSheet.close}>Cancelar</MobileButton>
+            <MobileButton variant="primary" fullWidth loading={criar.isPending}
+              onClick={() => criar.mutate({ nome, premio, preco: parseFloat(preco), totalNumeros: parseInt(totalNumeros), dataSorteio: dataSorteio || null, salaId: auth?.salaId, status: "ativa" })}>
+              Criar
+            </MobileButton>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Bottom Sheet: Editar Sorteio */}
+      <BottomSheet isOpen={editSheet.isOpen} onClose={editSheet.close} title="Editar Sorteio">
+        <div className="space-y-4">
+          <MobileInput label="Nome" icon="confirmation_number" value={editNome} onChange={(e) => setEditNome(e.target.value)} />
+          <MobileInput label="Prêmio" icon="emoji_events" value={editPremio} onChange={(e) => setEditPremio(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3">
+            <MobileInput label="Preço (R$)" icon="attach_money" type="number" value={editPreco} onChange={(e) => setEditPreco(e.target.value)} />
+            <MobileInput label="Números" icon="numbers" type="number" value={editTotalNumeros} onChange={(e) => setEditTotalNumeros(e.target.value)} />
+          </div>
+          <MobileInput label="Data" icon="event" type="date" value={editDataSorteio} onChange={(e) => setEditDataSorteio(e.target.value)} />
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <MobileButton variant="secondary" fullWidth onClick={editSheet.close}>Cancelar</MobileButton>
+            <MobileButton variant="primary" fullWidth loading={editar.isPending}
+              onClick={() => editar.mutate({ id: sorteioEditando?.id, nome: editNome, premio: editPremio, preco: parseFloat(editPreco), totalNumeros: parseInt(editTotalNumeros), dataSorteio: editDataSorteio || null })}>
+              Salvar
+            </MobileButton>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Bottom Sheet: Nova Venda */}
+      <BottomSheet isOpen={vendaSheet.isOpen} onClose={() => { vendaSheet.close(); resetVendaForm(); }} title={`Nº ${String(vendaNumero).padStart(3, "0")}`}>
+        <div className="space-y-4">
+          <MobileInput label="Nome do Comprador" icon="person" value={vendaCompradorNome} onChange={(e) => setVendaCompradorNome(e.target.value)} required />
+          <MobileInput label="Contato" icon="phone" type="tel" value={vendaCompradorContato} onChange={(e) => setVendaCompradorContato(e.target.value)} />
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Vendedor (Aluno)</label>
+            <select value={vendaVendedorId ?? ""} onChange={(e) => setVendaVendedorId(parseInt(e.target.value))} className="mobile-input appearance-none">
+              <option value="">Selecionar vendedor...</option>
+              {alunos.map((a: Aluno) => <option key={a.id} value={a.id}>{a.nome}</option>)}
+            </select>
+          </div>
+          <MobileInput label="Valor (R$)" icon="attach_money" type="number" value={vendaValor} onChange={(e) => setVendaValor(e.target.value)} />
+          {vendaError && <p className="text-sm text-red-500">{vendaError}</p>}
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <MobileButton variant="secondary" fullWidth onClick={vendaSheet.close}>Cancelar</MobileButton>
+            <MobileButton variant="primary" fullWidth loading={criarVenda.isPending}
+              onClick={() => { if (!vendaCompradorNome || !vendaVendedorId || !vendaValor) { setVendaError("Preencha todos os campos"); return; } criarVenda.mutate({ numero: vendaNumero, compradorNome: vendaCompradorNome, compradorContato: vendaCompradorContato, vendedorId: vendaVendedorId, valor: parseFloat(vendaValor), status: "pendente" }); }}>
+              Registrar
+            </MobileButton>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Bottom Sheet: Editar Venda */}
+      {ticketSelecionado && (
+        <BottomSheet isOpen={editVendaSheet.isOpen} onClose={() => { editVendaSheet.close(); setTicketSelecionado(null); }} title={`Venda Nº ${String(ticketSelecionado.numero).padStart(3, "0")}`}>
+          <div className="space-y-4">
+            <MobileInput label="Comprador" icon="person" value={editVendaCompradorNome} onChange={(e) => setEditVendaCompradorNome(e.target.value)} />
+            <MobileInput label="Contato" icon="phone" value={editVendaCompradorContato} onChange={(e) => setEditVendaCompradorContato(e.target.value)} />
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Vendedor</label>
+              <select value={editVendaVendedorId ?? ""} onChange={(e) => setEditVendaVendedorId(parseInt(e.target.value))} className="mobile-input appearance-none">
+                {alunos.map((a: Aluno) => <option key={a.id} value={a.id}>{a.nome}</option>)}
+              </select>
+            </div>
+            <MobileInput label="Valor (R$)" icon="attach_money" type="number" value={editVendaValor} onChange={(e) => setEditVendaValor(e.target.value)} />
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Status</label>
+              <select value={editVendaStatus} onChange={(e) => setEditVendaStatus(e.target.value as any)} className="mobile-input appearance-none">
+                <option value="pendente">Pendente</option>
+                <option value="pago">Pago</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <MobileButton variant="secondary" fullWidth onClick={() => { editVendaSheet.close(); setTicketSelecionado(null); }}>Cancelar</MobileButton>
+              <MobileButton variant="primary" fullWidth loading={editarVenda.isPending}
+                onClick={() => editarVenda.mutate({ id: ticketSelecionado.id, compradorNome: editVendaCompradorNome, compradorContato: editVendaCompradorContato, vendedorId: editVendaVendedorId, valor: parseFloat(editVendaValor), status: editVendaStatus })}>
+                Salvar
+              </MobileButton>
+            </div>
+            <MobileButton variant="danger" fullWidth icon="delete" loading={deletarVenda.isPending}
+              onClick={() => { if (confirm("Excluir venda?")) deletarVenda.mutate(ticketSelecionado.id); }}>
+              Excluir Venda
+            </MobileButton>
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Bottom Sheet: Confirmação de Sorteio */}
+      {sorteioSelecionado && (
+        <BottomSheet isOpen={sorteioSheet.isOpen} onClose={sorteioSheet.close} title="Realizar Sorteio">
+          <div className="text-center space-y-4 py-2">
+            <div className="size-20 rounded-full gradient-primary mx-auto flex items-center justify-center">
+              <span className="material-symbols-outlined text-white text-4xl">celebration</span>
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">{sorteioSelecionado.nome}</h3>
+              <p className="text-sm text-slate-500 mt-1">Prêmio: {sorteioSelecionado.premio}</p>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Ao confirmar, um número será sorteado aleatoriamente entre os <strong>números vendidos</strong>.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <MobileButton variant="secondary" fullWidth onClick={sorteioSheet.close}>Cancelar</MobileButton>
+              <MobileButton variant="primary" fullWidth icon="celebration" loading={sorteando === sorteioSelecionado.id}
+                onClick={() => { setSorteando(sorteioSelecionado.id); sortear.mutate(sorteioSelecionado.id); }}>
+                Sortear!
+              </MobileButton>
+            </div>
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* Bottom Sheet: Resultado */}
+      {numeroSorteado !== null && (
+        <BottomSheet isOpen={resultSheet.isOpen} onClose={resultSheet.close} title="🎉 Resultado do Sorteio">
+          <div ref={resultadoRef} className="text-center space-y-4 py-2">
+            <div className="text-6xl font-black text-indigo-600 dark:text-indigo-400">
+              {String(numeroSorteado).padStart(3, "0")}
+            </div>
+            <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">Número Sorteado</p>
+            {vencedorInfo ? (
+              <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 rounded-xl p-4">
+                <p className="text-lg font-black text-emerald-800 dark:text-emerald-300">🏆 {vencedorInfo.compradorNome}</p>
+                {vencedorInfo.compradorContato && (
+                  <p className="text-sm text-emerald-600 dark:text-emerald-400 mt-1">{vencedorInfo.compradorContato}</p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Número não vendido. Realize o resorteio.</p>
             )}
           </div>
-        </div>
-      </main>
-
-      {/* Modal de Edição de Sorteio */}
-      {showEditModal && sorteioEditando && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="text-xl font-bold">Editar Sorteio</h4>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-slate-600">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <input
-                className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                placeholder="Nome do sorteio"
-                value={editNome}
-                onChange={e => setEditNome(e.target.value)}
-              />
-              <input
-                className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                placeholder="Prêmio"
-                value={editPremio}
-                onChange={e => setEditPremio(e.target.value)}
-              />
-              <div className="grid grid-cols-2 gap-4">
-                <input
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  type="number"
-                  placeholder="Preço do número (R$)"
-                  value={editPreco}
-                  onChange={e => setEditPreco(e.target.value)}
-                />
-                <input
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  type="number"
-                  placeholder="Total de números"
-                  value={editTotalNumeros}
-                  onChange={e => setEditTotalNumeros(e.target.value)}
-                />
-              </div>
-              <input
-                className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                type="date"
-                placeholder="Data do sorteio"
-                value={editDataSorteio}
-                onChange={e => setEditDataSorteio(e.target.value)}
-              />
-              
-              {editError && <p className="text-red-500 text-sm">{editError}</p>}
-              
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => editar.mutate({ 
-                    id: sorteioEditando.id,
-                    nome: editNome, 
-                    premio: editPremio, 
-                    preco: parseFloat(editPreco),
-                    totalNumeros: parseInt(editTotalNumeros),
-                    dataSorteio: editDataSorteio || null
-                  })}
-                  disabled={editar.isPending}
-                  className="flex-1 bg-primary hover:bg-primary/90 text-white py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
-                >
-                  {editar.isPending ? "Salvando..." : "Salvar"}
-                </button>
-                <button 
-                  onClick={() => setShowEditModal(false)} 
-                  className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <MobileButton variant="secondary" icon="download" fullWidth onClick={handleDownloadResultado}>Baixar</MobileButton>
+            <MobileButton variant="primary" icon="share" fullWidth onClick={handleCompartilhar}>Compartilhar</MobileButton>
           </div>
-        </div>
+        </BottomSheet>
       )}
-
-      {/* Modal de Nova Venda */}
-      {showTicketModal && vendaNumero && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="text-xl font-bold">Nova Venda - Número {vendaNumero.toString().padStart(3, '0')}</h4>
-              <button onClick={() => { setShowTicketModal(false); resetVendaForm(); }} className="text-slate-400 hover:text-slate-600">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Nome do Comprador *
-                </label>
-                <input
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  placeholder="Nome completo"
-                  value={vendaCompradorNome}
-                  onChange={e => setVendaCompradorNome(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Contato (WhatsApp/Telefone)
-                </label>
-                <input
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  placeholder="(00) 00000-0000"
-                  value={vendaCompradorContato}
-                  onChange={e => setVendaCompradorContato(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Vendedor (Aluno) *
-                </label>
-                <select
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  value={vendaVendedorId || ""}
-                  onChange={e => setVendaVendedorId(parseInt(e.target.value))}
-                >
-                  <option value="">Selecione um vendedor</option>
-                  {alunos.map((aluno: Aluno) => (
-                    <option key={aluno.id} value={aluno.id}>{aluno.nome}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Valor (R$) *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  placeholder="0.00"
-                  value={vendaValor}
-                  onChange={e => setVendaValor(e.target.value)}
-                />
-              </div>
-
-              {vendaError && <p className="text-red-500 text-sm">{vendaError}</p>}
-              
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={handleSalvarVenda}
-                  disabled={criarVenda.isPending}
-                  className="flex-1 bg-primary hover:bg-primary/90 text-white py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
-                >
-                  {criarVenda.isPending ? "Salvando..." : "Salvar Venda"}
-                </button>
-                <button 
-                  onClick={() => { setShowTicketModal(false); resetVendaForm(); }} 
-                  className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Edição de Venda */}
-      {showEditVendaModal && ticketSelecionado && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 max-w-md w-full shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h4 className="text-xl font-bold">Editar Venda - Número {ticketSelecionado.numero.toString().padStart(3, '0')}</h4>
-              <button onClick={() => { setShowEditVendaModal(false); setTicketSelecionado(null); }} className="text-slate-400 hover:text-slate-600">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Status da Venda *
-                </label>
-                <select
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  value={editVendaStatus}
-                  onChange={e => setEditVendaStatus(e.target.value as "pago" | "pendente" | "cancelado")}
-                >
-                  <option value="pendente">🔵 Pendente</option>
-                  <option value="pago">🟢 Pago</option>
-                  <option value="cancelado">🔴 Cancelado</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Nome do Comprador *
-                </label>
-                <input
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  placeholder="Nome completo"
-                  value={editVendaCompradorNome}
-                  onChange={e => setEditVendaCompradorNome(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Contato (WhatsApp/Telefone)
-                </label>
-                <input
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  placeholder="(00) 00000-0000"
-                  value={editVendaCompradorContato}
-                  onChange={e => setEditVendaCompradorContato(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Vendedor (Aluno) *
-                </label>
-                <select
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  value={editVendaVendedorId || ""}
-                  onChange={e => setEditVendaVendedorId(parseInt(e.target.value))}
-                >
-                  <option value="">Selecione um vendedor</option>
-                  {alunos.map((aluno: Aluno) => (
-                    <option key={aluno.id} value={aluno.id}>{aluno.nome}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Valor (R$) *
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/20 focus:border-transparent"
-                  placeholder="0.00"
-                  value={editVendaValor}
-                  onChange={e => setEditVendaValor(e.target.value)}
-                />
-              </div>
-
-              {editVendaError && <p className="text-red-500 text-sm">{editVendaError}</p>}
-              
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={handleSalvarEdicaoVenda}
-                  disabled={editarVenda.isPending}
-                  className="flex-1 bg-primary hover:bg-primary/90 text-white py-2.5 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
-                >
-                  {editarVenda.isPending ? "Salvando..." : "Salvar"}
-                </button>
-                <button 
-                  onClick={() => { setShowEditVendaModal(false); setTicketSelecionado(null); }} 
-                  className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2.5 rounded-lg text-sm font-semibold transition-all"
-                >
-                  Cancelar
-                </button>
-              </div>
-
-              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                <button
-                  onClick={handleExcluirVenda}
-                  disabled={deletarVenda.isPending}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-all disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined text-sm">delete</span>
-                  {deletarVenda.isPending ? "Excluindo..." : "Excluir Venda"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Confirmação de Sorteio */}
-      {showSorteioModal && sorteioSelecionado && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
-            <div className="p-8 text-center flex flex-col items-center gap-6">
-              <div className="size-20 rounded-full bg-primary/10 text-primary flex items-center justify-center">
-                <span className="material-symbols-outlined !text-4xl">
-                  {isResorteio ? 'autorenew' : 'celebration'}
-                </span>
-              </div>
-              <div>
-                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2">
-                  {isResorteio ? 'Realizar novo sorteio?' : 'Preparado para o Sorteio?'}
-                </h3>
-                <p className="text-slate-500 dark:text-slate-400">
-                  {isResorteio 
-                    ? 'Um novo número será sorteado. O resultado anterior será substituído.'
-                    : 'Esta ação irá sortear aleatoriamente um número entre os vendidos e definirá o ganhador do sorteio.'}
-                </p>
-              </div>
-              <div className="w-full bg-slate-50 dark:bg-slate-800 p-6 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs text-slate-500 uppercase font-bold tracking-widest">Universo de Sorteio</span>
-                  <span className="text-xl font-bold text-primary">{getEstatisticas(sorteioSelecionado.id).numerosVendidos} Números Pagos</span>
-                </div>
-              </div>
-              <div className="flex gap-4 w-full">
-                <button 
-                  onClick={() => {
-                    setShowSorteioModal(false);
-                    setIsResorteio(false);
-                  }}
-                  className="flex-1 h-12 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  onClick={handleIniciarSorteio}
-                  className="flex-1 h-12 rounded-lg bg-primary text-white font-bold shadow-lg shadow-primary/20 hover:bg-primary/90 transition-all"
-                >
-                  {isResorteio ? 'Sortear Novamente' : 'Iniciar Sorteio'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Resultado do Sorteio */}
-      {showResultadoModal && vencedorInfo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div ref={resultadoRef} className="relative w-full max-w-[520px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden border border-slate-200 dark:border-slate-800">
-            <div className="flex flex-col items-center p-8 text-center relative z-10">
-              <div className="mb-6 flex justify-center">
-                <div className="w-20 h-20 bg-primary/10 dark:bg-primary/20 rounded-full flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined text-5xl">auto_awesome</span>
-                </div>
-              </div>
-
-              <h2 className="text-slate-900 dark:text-slate-100 text-2xl font-bold leading-tight mb-2">
-                O número sorteado foi...
-              </h2>
-              
-              <div className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 rounded-2xl p-8 mb-6 relative">
-                <div className="relative">
-                  <span className="text-slate-400 dark:text-slate-500 text-xs font-bold uppercase tracking-widest block mb-2">
-                    Número Ganhador
-                  </span>
-                  <div className="text-7xl md:text-8xl font-black text-primary dark:text-primary tracking-tighter tabular-nums drop-shadow-sm">
-                    {numeroSorteado?.toString().padStart(3, '0')}
-                  </div>
-                </div>
-              </div>
-
-              <div className="w-full bg-primary/5 rounded-xl p-6 mb-8 text-left">
-                <h3 className="font-bold text-lg mb-3 text-primary">Dados do Ganhador</h3>
-                <div className="space-y-2">
-                  <p><span className="font-medium text-slate-600">Nome:</span> {vencedorInfo.compradorNome}</p>
-                  {vencedorInfo.compradorContato && (
-                    <p><span className="font-medium text-slate-600">Contato:</span> {vencedorInfo.compradorContato}</p>
-                  )}
-                  <p><span className="font-medium text-slate-600">Número:</span> {vencedorInfo.numero.toString().padStart(3, '0')}</p>
-                </div>
-              </div>
-
-              <div className="flex flex-col w-full gap-3">
-                <div className="flex gap-3">
-                  <button 
-                    onClick={handleCompartilhar}
-                    className="flex-1 flex items-center justify-center gap-2 h-12 rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition-all"
-                  >
-                    <span className="material-symbols-outlined">share</span>
-                    Compartilhar
-                  </button>
-                  <button 
-                    onClick={handleDownloadResultado}
-                    className="flex-1 flex items-center justify-center gap-2 h-12 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
-                  >
-                    <span className="material-symbols-outlined">download</span>
-                    Baixar
-                  </button>
-                </div>
-                
-                {/* Botão Sortear Novamente */}
-                <button 
-                  onClick={() => {
-                    setShowResultadoModal(false);
-                    setShowSorteioModal(true);
-                    setIsResorteio(true);
-                  }}
-                  className="flex items-center justify-center w-full h-12 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-amber-500/20"
-                >
-                  <span className="material-symbols-outlined mr-2">refresh</span>
-                  Sortear Novamente
-                </button>
-                
-                <button 
-                  onClick={() => setShowResultadoModal(false)}
-                  className="flex items-center justify-center w-full h-12 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-lg font-bold rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                >
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+    </MobileLayout>
   );
 }
