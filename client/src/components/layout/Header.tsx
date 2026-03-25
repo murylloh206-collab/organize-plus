@@ -1,45 +1,68 @@
-import { useDarkMode } from "../../hooks/useDarkMode";
+import { useNavigate } from "react-router-dom";
+import ThemeToggle from "../ThemeToggle";
 
 interface HeaderProps {
   title: string;
-  userName?: string;
+  subtitle?: string;
+  showBack?: boolean;
+  actions?: Array<{ icon: string; onClick: () => void; label?: string }>;
+  className?: string;
 }
 
-export default function Header({ title, userName }: HeaderProps) {
-  const { isDark, toggle } = useDarkMode();
+export default function Header({
+  title,
+  subtitle,
+  showBack = false,
+  actions = [],
+  className = "",
+}: HeaderProps) {
+  const navigate = useNavigate();
 
   return (
-    <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md px-8 flex items-center justify-between sticky top-0 z-10">
-      <h2 className="text-lg font-bold">{title}</h2>
-
-      <div className="flex items-center gap-4">
-        {/* Theme toggle */}
-        <button
-          onClick={toggle}
-          className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-          aria-label="Alternar modo escuro"
-        >
-          <span className="material-symbols-outlined text-[20px]">
-            {isDark ? "light_mode" : "dark_mode"}
-          </span>
-        </button>
-
-        {/* Notifications */}
-        <button className="relative p-2 rounded-lg text-slate-500 hover:text-primary transition-colors">
-          <span className="material-symbols-outlined text-[22px]">notifications</span>
-          <span className="absolute top-1.5 right-1.5 size-2 bg-red-500 rounded-full border-2 border-white dark:border-slate-900" />
-        </button>
-
-        {/* User */}
-        {userName && (
-          <div className="flex items-center gap-2 pl-4 border-l border-slate-200 dark:border-slate-800">
-            <div className="size-8 rounded-full bg-primary flex items-center justify-center text-white font-bold text-sm">
-              {userName.charAt(0).toUpperCase()}
-            </div>
-            <span className="text-sm font-semibold hidden sm:block">{userName}</span>
+    <header className={`bg-gradient-to-r from-[#1e3a5f] to-[#0f2a44] border-b border-[#c6a43f]/20 sticky top-0 z-10 ${className}`}>
+      <div className="px-6 py-4 flex items-center justify-between">
+        {/* Lado esquerdo */}
+        <div className="flex items-center gap-3">
+          {showBack && (
+            <button
+              onClick={() => navigate(-1)}
+              className="p-2 -ml-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors"
+            >
+              <span className="material-symbols-outlined text-white text-2xl">
+                arrow_back
+              </span>
+            </button>
+          )}
+          <div>
+            <h1 className="text-xl font-bold text-white leading-tight tracking-tight">
+              {title}
+            </h1>
+            {subtitle && (
+              <p className="text-xs text-white/70 font-medium mt-0.5">
+                {subtitle}
+              </p>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* Lado direito */}
+        <div className="flex items-center gap-2">
+          {actions.map((action, i) => (
+            <button
+              key={i}
+              onClick={action.onClick}
+              aria-label={action.label}
+              className="p-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors text-white"
+            >
+              <span className="material-symbols-outlined text-xl">{action.icon}</span>
+            </button>
+          ))}
+          <ThemeToggle />
+        </div>
       </div>
+
+      {/* Linha decorativa dourada */}
+      <div className="h-0.5 bg-gradient-to-r from-[#c6a43f] via-[#d4b254] to-[#c6a43f] opacity-50" />
     </header>
   );
 }

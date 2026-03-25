@@ -53,7 +53,7 @@ export default function AcessoPage() {
     return score;
   };
   const forca = calcularForca(senha);
-  const forcaColor = forca <= 2 ? "bg-red-500" : forca <= 3 ? "bg-amber-500" : "bg-emerald-500";
+  const forcaColor = forca <= 2 ? "bg-rose-500" : forca <= 3 ? "bg-amber-500" : "bg-emerald-500";
   const forcaText = forca <= 2 ? "Fraca" : forca <= 3 ? "Média" : "Forte";
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,37 +79,58 @@ export default function AcessoPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-gradient-to-b from-[#1e3a5f] to-[#0f2a44] flex flex-col">
       {/* Header wave gradient */}
-      <div className="h-44 gradient-primary relative overflow-hidden flex-shrink-0">
-        <div className="absolute inset-0 opacity-20"
+      <div className="h-44 bg-gradient-to-br from-[#c6a43f]/20 to-[#d4b254]/10 relative overflow-hidden flex-shrink-0">
+        <div className="absolute inset-0 opacity-10"
           style={{ backgroundImage: "radial-gradient(circle at 70% 50%, white 1px, transparent 0)", backgroundSize: "20px 20px" }} />
-        <Link to="/" className="absolute top-5 left-5 p-2 rounded-xl bg-white/20 text-white">
+        
+        {/* Botão voltar */}
+        <Link to="/" className="absolute top-5 left-5 p-2 rounded-xl bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 transition-all border border-white/20">
           <span className="material-symbols-outlined">arrow_back</span>
         </Link>
+        
+        {/* Conteúdo do header */}
         <div className="absolute bottom-8 left-6">
-          <h1 className="text-2xl font-black text-white tracking-tight">
-            {modo === "entrar" ? "Bem-vindo de volta 👋" : "Criar conta"}
-          </h1>
-          <p className="text-indigo-200 text-sm font-medium mt-1">
-            {modo === "entrar" ? "Acesse sua conta Organize+" : "Junte-se ao Organize+"}
+          <div className="flex items-center gap-3 mb-2">
+            <div className="text-4xl">
+              {modo === "entrar" ? "👋" : "🎓"}
+            </div>
+            <h1 className="text-2xl font-black text-white tracking-tight">
+              {modo === "entrar" ? "Bem-vindo de volta" : "Criar conta"}
+            </h1>
+          </div>
+          <p className="text-white/80 text-sm font-medium mt-1">
+            {modo === "entrar" 
+              ? "Acesse sua conta Organize+" 
+              : "Junte-se ao Organize+ e organize sua formatura"}
           </p>
         </div>
+        
+        {/* Decoração dourada */}
+        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 w-24 h-1 bg-gradient-to-r from-transparent via-[#c6a43f] to-transparent rounded-full" />
       </div>
 
       {/* Form Card */}
-      <div className="flex-1 -mt-6 bg-background rounded-t-3xl relative z-10 px-5 pt-6 pb-10 max-w-lg mx-auto w-full">
-
+      <div className="flex-1 -mt-6 bg-white dark:bg-slate-900 rounded-t-3xl relative z-10 px-5 pt-6 pb-10 max-w-lg mx-auto w-full shadow-2xl">
         {/* Mode Tabs */}
-        <div className="mobile-tab-bar mb-6">
+        <div className="flex gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl mb-6">
           <button
-            className={`mobile-tab-item flex-1 ${modo === "entrar" ? "active" : ""}`}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              modo === "entrar"
+                ? "bg-[#1e3a5f] text-white shadow-md"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+            }`}
             onClick={() => { setModo("entrar"); setError(""); }}
           >
             Entrar
           </button>
           <button
-            className={`mobile-tab-item flex-1 ${modo === "cadastrar" ? "active" : ""}`}
+            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              modo === "cadastrar"
+                ? "bg-[#1e3a5f] text-white shadow-md"
+                : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+            }`}
             onClick={() => { setModo("cadastrar"); setError(""); }}
           >
             Criar conta
@@ -126,7 +147,7 @@ export default function AcessoPage() {
                 onClick={() => setTipo(t)}
                 className={`py-3 rounded-xl text-sm font-semibold border-2 transition-all ${
                   tipo === t
-                    ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300"
+                    ? "border-[#c6a43f] bg-[#c6a43f]/10 text-[#c6a43f]"
                     : "border-slate-200 dark:border-slate-700 text-slate-500"
                 }`}
               >
@@ -138,9 +159,9 @@ export default function AcessoPage() {
 
         {/* Commission info */}
         {modo === "cadastrar" && tipo === "comissao" && (
-          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded-xl p-3 mb-5 flex gap-2">
-            <span className="material-symbols-outlined text-amber-600 text-lg flex-shrink-0 mt-0.5">info</span>
-            <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+          <div className="bg-[#c6a43f]/10 border border-[#c6a43f]/30 rounded-xl p-3 mb-5 flex gap-2">
+            <span className="material-symbols-outlined text-[#c6a43f] text-lg flex-shrink-0 mt-0.5">info</span>
+            <p className="text-xs text-[#c6a43f] leading-relaxed">
               Após criar, você precisará de uma chave de acesso para criar turmas.
             </p>
           </div>
@@ -187,7 +208,7 @@ export default function AcessoPage() {
             <div className="flex items-center justify-between">
               <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Senha</label>
               {modo === "entrar" && (
-                <button type="button" className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold hover:underline">
+                <button type="button" className="text-xs text-[#c6a43f] font-semibold hover:underline">
                   Esqueceu?
                 </button>
               )}
@@ -198,7 +219,7 @@ export default function AcessoPage() {
                 type={mostrarSenha ? "text" : "password"}
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
-                className="mobile-input pl-11 pr-11"
+                className="w-full pl-11 pr-11 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#c6a43f]/20 focus:border-[#c6a43f] outline-none transition-all"
                 placeholder="••••••••"
                 required
                 autoComplete={modo === "entrar" ? "current-password" : "new-password"}
@@ -233,7 +254,7 @@ export default function AcessoPage() {
                   <select
                     value={turmaId}
                     onChange={(e) => setTurmaId(e.target.value)}
-                    className="mobile-input pl-11 appearance-none"
+                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-[#c6a43f]/20 focus:border-[#c6a43f] outline-none transition-all appearance-none"
                     required
                   >
                     <option value="" disabled>
@@ -259,9 +280,9 @@ export default function AcessoPage() {
 
           {/* Error */}
           {error && (
-            <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 flex items-start gap-2">
-              <span className="material-symbols-outlined text-red-500 text-lg flex-shrink-0">error</span>
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 flex items-start gap-2">
+              <span className="material-symbols-outlined text-rose-500 text-lg flex-shrink-0">error</span>
+              <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>
             </div>
           )}
 
@@ -272,7 +293,7 @@ export default function AcessoPage() {
             fullWidth
             loading={loading}
             icon={modo === "entrar" ? "login" : "person_add"}
-            className="mt-2 rounded-2xl shadow-lg shadow-indigo-500/20"
+            className="mt-2 rounded-2xl shadow-lg shadow-[#c6a43f]/20"
           >
             {modo === "entrar" ? "Entrar" : "Criar minha conta"}
           </MobileButton>
@@ -280,9 +301,9 @@ export default function AcessoPage() {
 
         <p className="text-center text-xs text-slate-400 mt-6">
           Ao continuar, você concorda com os{" "}
-          <Link to="/termos" className="text-indigo-600 dark:text-indigo-400 hover:underline">Termos de Uso</Link>
+          <Link to="/termos" className="text-[#c6a43f] hover:underline">Termos de Uso</Link>
           {" "}e{" "}
-          <Link to="/privacidade" className="text-indigo-600 dark:text-indigo-400 hover:underline">Privacidade</Link>
+          <Link to="/privacidade" className="text-[#c6a43f] hover:underline">Privacidade</Link>
         </p>
       </div>
     </div>

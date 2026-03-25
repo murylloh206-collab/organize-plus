@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import MobileLayout from "../../components/layout/MobileLayout";
-import MobileHeader from "../../components/layout/MobileHeader";
 import MobileMetricCard from "../../components/ui/MobileMetricCard";
 import MobileCard from "../../components/ui/MobileCard";
 import MobileBadge from "../../components/ui/MobileBadge";
@@ -65,18 +64,22 @@ export default function AdminDashboard() {
 
   return (
     <MobileLayout role="admin">
-      {/* Gradient Header */}
-      <div className="mobile-header-gradient pb-6 px-5 pt-12">
-        <div>
-          <p className="text-indigo-200 text-sm font-medium">Olá, Comissão </p>
-          <h1 className="text-2xl font-black text-white tracking-tight mt-0.5">Dashboard</h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link to="/admin/configuracoes"
-            className="p-2 rounded-xl bg-white/20 hover:bg-white/30 transition-colors">
+      {/* Gradient Header - Versão arredondada com detalhe dourado */}
+      <div className="relative bg-gradient-to-r from-[#1e3a5f] to-[#0f2a44] pt-12 pb-8 px-5 rounded-b-[2rem] shadow-lg">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-white/80 text-sm font-medium">Olá, Comissão</p>
+            <h1 className="text-2xl font-black text-white tracking-tight mt-1">Dashboard</h1>
+          </div>
+          <Link
+            to="/admin/configuracoes"
+            className="p-2 rounded-xl bg-white/20 hover:bg-white/30 transition-colors"
+          >
             <span className="material-symbols-outlined text-white text-xl">settings</span>
           </Link>
         </div>
+        {/* Linha dourada decorativa no centro */}
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-24 h-0.5 bg-gradient-to-r from-transparent via-[#c6a43f] to-transparent rounded-full" />
       </div>
 
       <div className="px-4 -mt-3 space-y-4 pb-6">
@@ -121,11 +124,11 @@ export default function AdminDashboard() {
                 {formatCurrency(metaArrecadado)} de {formatCurrency(metaTotal)}
               </p>
             </div>
-            <ProgressCircle value={percentualMeta} size={72} strokeWidth={7} color="#6366f1" />
+            <ProgressCircle value={percentualMeta} size={72} strokeWidth={7} color="#c6a43f" />
           </div>
           <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5">
             <div
-              className="h-1.5 rounded-full gradient-primary transition-all duration-700"
+              className="h-1.5 rounded-full bg-[#c6a43f] transition-all duration-700"
               style={{ width: `${Math.min(percentualMeta, 100)}%` }}
             />
           </div>
@@ -151,13 +154,13 @@ export default function AdminDashboard() {
                   <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-t-lg overflow-hidden flex items-end" style={{ height: "88px" }}>
                     <div
                       className={`w-full rounded-t-lg transition-all duration-500 ${
-                        i === mesAtual ? "gradient-primary" : "bg-indigo-200 dark:bg-indigo-900/40"
+                        i === mesAtual ? "bg-[#c6a43f]" : "bg-[#c6a43f]/40"
                       }`}
                       style={{ height: `${Math.max(height, 4)}%` }}
                     />
                   </div>
                   <span className={`text-[9px] font-bold uppercase ${
-                    i === mesAtual ? "text-indigo-600 dark:text-indigo-400" : "text-slate-400"
+                    i === mesAtual ? "text-[#c6a43f]" : "text-slate-400"
                   }`}>
                     {mes}
                   </span>
@@ -195,7 +198,7 @@ export default function AdminDashboard() {
             <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
               Pagamentos Recentes
             </p>
-            <Link to="/admin/pagamentos" className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold">
+            <Link to="/admin/pagamentos" className="text-xs text-[#c6a43f] font-semibold">
               Ver todos
             </Link>
           </div>

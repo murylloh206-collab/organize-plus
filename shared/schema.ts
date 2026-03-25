@@ -155,6 +155,7 @@ export const caixa = pgTable("caixa", {
   tipo: tipoMovEnum("tipo").notNull(),
   valor: decimal("valor", { precision: 12, scale: 2 }).notNull(),
   data: timestamp("data").defaultNow(),
+  categoria: text("categoria"),
   createdBy: integer("created_by").references(() => usuarios.id),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

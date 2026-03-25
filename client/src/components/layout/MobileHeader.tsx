@@ -22,115 +22,125 @@ export default function MobileHeader({
 }: MobileHeaderProps) {
   const navigate = useNavigate();
 
+  // Estilo gradient (azul escuro)
   if (gradient) {
     return (
-      <header className={`mobile-header-gradient ${className}`}>
-        <div className="flex items-center gap-3">
-          {showBack && (
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 -ml-2 rounded-xl hover:bg-white/20 active:bg-white/30 transition-colors"
-            >
-              <span className="material-symbols-outlined text-white">arrow_back</span>
-            </button>
-          )}
-          <div>
-            <h1 className="text-lg font-bold text-white leading-tight">{title}</h1>
-            {subtitle && (
-              <p className="text-xs text-indigo-200 font-medium">{subtitle}</p>
+      <header className={`sticky top-0 z-10 ${className}`}>
+        <div className="bg-gradient-to-r from-[#1e3a5f] to-[#0f2a44] px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {showBack && (
+              <button
+                onClick={() => navigate(-1)}
+                className="p-2 -ml-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors"
+              >
+                <span className="material-symbols-outlined text-white text-2xl">arrow_back</span>
+              </button>
             )}
+            <div>
+              <h1 className="text-xl font-bold text-white leading-tight tracking-tight">{title}</h1>
+              {subtitle && (
+                <p className="text-xs text-white/70 font-medium mt-0.5">{subtitle}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {actions.map((action, i) => (
+              <button
+                key={i}
+                onClick={action.onClick}
+                aria-label={action.label}
+                className="p-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors text-white"
+              >
+                <span className="material-symbols-outlined text-xl">{action.icon}</span>
+              </button>
+            ))}
+            <ThemeToggle />
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          {actions.map((action, i) => (
-            <button
-              key={i}
-              onClick={action.onClick}
-              aria-label={action.label}
-              className="p-2 rounded-xl hover:bg-white/20 active:bg-white/30 transition-colors"
-            >
-              <span className="material-symbols-outlined text-white text-xl">{action.icon}</span>
-            </button>
-          ))}
-          <ThemeToggle />
-        </div>
+        <div className="h-0.5 bg-gradient-to-r from-[#c6a43f] via-[#d4b254] to-[#c6a43f] opacity-50" />
       </header>
     );
   }
 
+  // Estilo gold (também azul escuro agora)
   if (gold) {
     return (
-      <header className={`mobile-header-gold ${className}`}>
+      <header className={`sticky top-0 z-10 ${className}`}>
+        <div className="bg-gradient-to-r from-[#1e3a5f] to-[#0f2a44] px-5 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {showBack && (
+              <button
+                onClick={() => navigate(-1)}
+                className="p-2 -ml-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors"
+              >
+                <span className="material-symbols-outlined text-white text-2xl">arrow_back</span>
+              </button>
+            )}
+            <div>
+              <h1 className="text-xl font-bold text-white leading-tight tracking-tight">{title}</h1>
+              {subtitle && (
+                <p className="text-xs text-white/70 font-medium mt-0.5">{subtitle}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {actions.map((action, i) => (
+              <button
+                key={i}
+                onClick={action.onClick}
+                aria-label={action.label}
+                className="p-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors text-white"
+              >
+                <span className="material-symbols-outlined text-xl">{action.icon}</span>
+              </button>
+            ))}
+            <ThemeToggle />
+          </div>
+        </div>
+        <div className="h-0.5 bg-gradient-to-r from-[#c6a43f] via-[#d4b254] to-[#c6a43f] opacity-50" />
+      </header>
+    );
+  }
+
+  // Estilo padrão (também azul escuro)
+  return (
+    <header className={`sticky top-0 z-10 ${className}`}>
+      <div className="bg-gradient-to-r from-[#1e3a5f] to-[#0f2a44] px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {showBack && (
             <button
               onClick={() => navigate(-1)}
-              className="p-2 -ml-2 rounded-xl hover:bg-white/20 active:bg-white/30 transition-colors"
+              className="p-2 -ml-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors"
             >
-              <span className="material-symbols-outlined text-white">arrow_back</span>
+              <span className="material-symbols-outlined text-white text-2xl">arrow_back</span>
             </button>
           )}
           <div>
-            <h1 className="text-lg font-bold text-white leading-tight">{title}</h1>
+            <h1 className="text-xl font-bold text-white leading-tight tracking-tight">
+              {title}
+            </h1>
             {subtitle && (
-              <p className="text-xs text-amber-100 font-medium">{subtitle}</p>
+              <p className="text-xs text-white/70 font-medium mt-0.5">
+                {subtitle}
+              </p>
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           {actions.map((action, i) => (
             <button
               key={i}
               onClick={action.onClick}
               aria-label={action.label}
-              className="p-2 rounded-xl hover:bg-white/20 active:bg-white/30 transition-colors"
+              className="p-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition-colors text-white"
             >
-              <span className="material-symbols-outlined text-white text-xl">{action.icon}</span>
+              <span className="material-symbols-outlined text-xl">{action.icon}</span>
             </button>
           ))}
           <ThemeToggle />
         </div>
-      </header>
-    );
-  }
-
-  return (
-    <header className={`mobile-header ${className}`}>
-      <div className="flex items-center gap-3">
-        {showBack && (
-          <button
-            onClick={() => navigate(-1)}
-            className="p-2 -ml-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 transition-colors"
-          >
-            <span className="material-symbols-outlined text-slate-700 dark:text-slate-200">
-              arrow_back
-            </span>
-          </button>
-        )}
-        <div>
-          <h1 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
-            {title}
-          </h1>
-          {subtitle && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-              {subtitle}
-            </p>
-          )}
-        </div>
       </div>
-      <div className="flex items-center gap-1">
-        {actions.map((action, i) => (
-          <button
-            key={i}
-            onClick={action.onClick}
-            aria-label={action.label}
-            className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300"
-          >
-            <span className="material-symbols-outlined text-xl">{action.icon}</span>
-          </button>
-        ))}
-        <ThemeToggle />
-      </div>
+      <div className="h-0.5 bg-gradient-to-r from-[#c6a43f] via-[#d4b254] to-[#c6a43f] opacity-50" />
     </header>
   );
 }

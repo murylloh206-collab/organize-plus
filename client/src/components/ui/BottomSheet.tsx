@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from "react";
+// client/src/components/ui/BottomSheet.tsx
+import React, { useEffect, useRef, useState } from "react";
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -13,11 +14,13 @@ export default function BottomSheet({
   onClose,
   title,
   children,
-  maxHeight = "90vh",
+  maxHeight = "75vh",
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const startYRef = useRef<number>(0);
+  const currentYRef = useRef<number>(0);
   const isDraggingRef = useRef<boolean>(false);
+  const [translateY, setTranslateY] = useState(0);
 
   // Close on Escape key
   useEffect(() => {
@@ -32,22 +35,39 @@ export default function BottomSheet({
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
+      setTranslateY(0);
     } else {
       document.body.style.overflow = "";
+      setTranslateY(0);
     }
-    return () => { document.body.style.overflow = ""; };
+    return () => {
+      document.body.style.overflow = "";
+    };
   }, [isOpen]);
 
-  // Touch drag to close
+  // Touch drag handlers
   const handleTouchStart = (e: React.TouchEvent) => {
     startYRef.current = e.touches[0].clientY;
+    currentYRef.current = translateY;
     isDraggingRef.current = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDraggingRef.current) return;
+    const deltaY = e.touches[0].clientY - startYRef.current;
+    if (deltaY > 0) {
+      setTranslateY(currentYRef.current + deltaY);
+    }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
     if (!isDraggingRef.current) return;
     const deltaY = e.changedTouches[0].clientY - startYRef.current;
-    if (deltaY > 80) onClose(); // swipe down > 80px closes
+    if (deltaY > 80) {
+      onClose(); // swipe down > 80px closes
+    } else {
+      setTranslateY(0); // snap back
+    }
     isDraggingRef.current = false;
   };
 
@@ -57,31 +77,37 @@ export default function BottomSheet({
     <>
       {/* Overlay */}
       <div
-        className="bottom-sheet-overlay"
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
+      
       {/* Panel */}
       <div
         ref={sheetRef}
-        className="bottom-sheet-panel"
-        style={{ maxHeight }}
+        className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 rounded-t-2xl shadow-xl z-50 flex flex-col"
+        style={{ 
+          maxHeight,
+          transform: `translateY(${translateY}px)`,
+          transition: isDraggingRef.current ? 'none' : 'transform 0.3s ease-out'
+        }}
         role="dialog"
         aria-modal="true"
         aria-label={title}
       >
         {/* Drag handle */}
         <div
-          className="flex justify-center pt-3 pb-1 cursor-grab"
+          className="flex justify-center pt-3 pb-1 cursor-grab active:cursor-grabbing flex-shrink-0"
           onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
         >
-          <div className="w-10 h-1 rounded-full bg-slate-200 dark:bg-slate-700" />
+          <div className="w-10 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
         </div>
 
         {/* Header */}
         {title && (
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
             <h2 className="text-base font-bold text-slate-900 dark:text-white">
               {title}
             </h2>
@@ -94,8 +120,10 @@ export default function BottomSheet({
           </div>
         )}
 
-        {/* Content */}
-        <div className="px-5 py-4">{children}</div>
+        {/* Content - com scroll e padding-bottom para a sidebar */}
+        <div className="overflow-y-auto flex-1 px-5 py-4 pb-24">
+          {children}
+        </div>
       </div>
     </>
   );

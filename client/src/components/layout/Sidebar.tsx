@@ -13,6 +13,7 @@ const adminLinks = [
   { to: "/admin/eventos", icon: "event", label: "Eventos" },
   { to: "/admin/metas", icon: "stars", label: "Metas" },
   { to: "/admin/ranking", icon: "emoji_events", label: "Ranking" },
+  { to: "/admin/caixa", icon: "account_balance_wallet", label: "Caixa" },
   { to: "/admin/relatorios", icon: "bar_chart", label: "Relatórios" },
   { to: "/admin/configuracoes", icon: "settings", label: "Configurações" },
 ];

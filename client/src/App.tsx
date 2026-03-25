@@ -4,9 +4,11 @@ import TermosPage from "./pages/termos";
 import CriadorPage from "./pages/criador";
 import PrivacidadePage from "./pages/privacidade";
 import SuportePage from "./pages/suporte";
+import AdminCaixa from "./pages/admin/caixa";
+
 
 // Pages
-import HomePage from "./pages/home";
+import HomePage from "./pages/home"; 
 import AcessoPage from "./pages/acesso";
 
 // Admin
@@ -73,6 +75,8 @@ export default function App() {
         <Route path="/admin/ranking" element={<RequireAuth role="admin"><AdminRanking /></RequireAuth>} />
         <Route path="/admin/relatorios" element={<RequireAuth role="admin"><AdminRelatorios /></RequireAuth>} />
         <Route path="/admin/configuracoes" element={<RequireAuth role="admin"><AdminConfiguracoes /></RequireAuth>} />
+        <Route path="/admin/caixa" element={<RequireAuth role="admin"><AdminCaixa /></RequireAuth>} />
+
 
         {/* Aluno */}
         <Route path="/aluno/dashboard" element={<RequireAuth role="aluno"><AlunoDashboard /></RequireAuth>} />
