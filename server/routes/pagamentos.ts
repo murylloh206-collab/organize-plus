@@ -1,30 +1,34 @@
 import { Router } from "express";
+import multer from "multer";
+import fs from "fs";
+import path from "path";
 import { requireAuth, requireAdmin } from "../auth.js";
 import { 
   getPagamentosBySala, 
-  getPagamentosByUsuario,
+  getPagamentosByUsuario, 
   getPagamentosPendentes,
-  createPagamento, 
+  getPagamentoById,
+  createPagamento,
   updatePagamento,
+  deletePagamento,
   confirmarPagamentoViaComprovante,
-  deletePagamento
+  aprovarComprovante,
+  rejeitarComprovante,
+  getPagamentosComComprovantePendente
 } from "../storage.js";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
 
 const router = Router();
 
 // Configurar multer para upload de comprovantes
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
+const storageMulter = multer.diskStorage({
+  destination: (_req: any, _file: any, cb: any) => {
     const dir = "uploads/comprovantes/";
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     cb(null, dir);
   },
-  filename: (_req, file, cb) => {
+  filename: (_req: any, file: any, cb: any) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
     const ext = path.extname(file.originalname);
     cb(null, `comprovante-${uniqueSuffix}${ext}`);
@@ -32,9 +36,9 @@ const storage = multer.diskStorage({
 });
 
 const upload = multer({ 
-  storage,
+  storage: storageMulter,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req: any, file: any, cb: any) => {
     const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "application/pdf"];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
@@ -76,6 +80,18 @@ router.get("/pendentes", requireAdmin, async (req, res) => {
     res.json(result);
   } catch (error) {
     console.error("Erro ao buscar pagamentos pendentes:", error);
+    res.status(500).json({ message: "Erro interno" });
+  }
+});
+
+// GET /api/pagamentos/comprovantes-pendentes - Listar comprovantes aguardando análise
+router.get("/comprovantes-pendentes", requireAdmin, async (req, res) => {
+  try {
+    const salaId = req.session.salaId!;
+    const result = await getPagamentosComComprovantePendente(salaId);
+    res.json(result);
+  } catch (error) {
+    console.error("Erro ao buscar comprovantes pendentes:", error);
     res.status(500).json({ message: "Erro interno" });
   }
 });
@@ -175,10 +191,6 @@ router.delete("/:id", requireAdmin, async (req, res) => {
     const id = parseInt(req.params.id);
     console.log(`[ROUTE] Tentando deletar pagamento ID: ${id}`);
     
-    // Importar a função getPagamentoById
-    const { getPagamentoById, deletePagamento } = await import("../storage.js");
-    
-    // Verificar se o pagamento existe
     const pagamento = await getPagamentoById(id);
     
     if (!pagamento) {
@@ -192,6 +204,73 @@ router.delete("/:id", requireAdmin, async (req, res) => {
     res.status(204).send();
   } catch (e: any) {
     console.error(`[ROUTE] Erro ao deletar pagamento ID ${req.params.id}:`, e);
+    res.status(400).json({ message: e.message });
+  }
+});
+
+// Nova rota: Aluno envia comprovante
+router.post("/:id/comprovante", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { comprovanteUrl, descricaoPagamento } = req.body;
+    
+    const pagamento = await getPagamentoById(parseInt(id));
+    
+    if (!pagamento) {
+      return res.status(404).json({ message: "Pagamento não encontrado" });
+    }
+    
+    if (pagamento.usuarioId !== req.session.userId) {
+      return res.status(403).json({ message: "Não autorizado" });
+    }
+    
+    const atualizado = await updatePagamento(parseInt(id), {
+      comprovanteUrl,
+      descricaoPagamento,
+      statusComprovante: "pendente",
+      status: "pendente"
+    });
+    
+    res.json(atualizado);
+  } catch (e: any) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+// Nova rota: Admin aprova comprovante
+router.post("/:id/aprovar", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const atualizado = await aprovarComprovante(
+      parseInt(id),
+      req.session.userId!
+    );
+    
+    res.json(atualizado);
+  } catch (e: any) {
+    res.status(400).json({ message: e.message });
+  }
+});
+
+// Nova rota: Admin rejeita comprovante
+router.post("/:id/rejeitar", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { motivo } = req.body;
+    
+    if (!motivo) {
+      return res.status(400).json({ message: "Motivo da rejeição é obrigatório" });
+    }
+    
+    const atualizado = await rejeitarComprovante(
+      parseInt(id),
+      req.session.userId!,
+      motivo
+    );
+    
+    res.json(atualizado);
+  } catch (e: any) {
     res.status(400).json({ message: e.message });
   }
 });

@@ -28,7 +28,7 @@ export default function AlunoPerfil() {
   
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [fotoPerfil, setFotoPerfil] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const { data: me, refetch } = useQuery({
     queryKey: ["me"],
@@ -66,6 +66,20 @@ export default function AlunoPerfil() {
     onError: (e: any) => showError(e.message),
   });
 
+  // Altere a mutation do avatar:
+const atualizarAvatar = useMutation({
+  mutationFn: (formData: FormData) => apiRequest("POST", "/alunos/me/avatar", formData, true),
+  onSuccess: (data) => {
+    showSuccess("Foto atualizada com sucesso!");
+    refetch();
+    setUploading(false);
+  },
+  onError: (e: any) => {
+    showError(e.message);
+    setUploading(false);
+  },
+});
+
   const handleSaveInfo = () => {
     const updateData: any = {};
     if (nome && nome !== me?.nome) updateData.nome = nome;
@@ -81,12 +95,31 @@ export default function AlunoPerfil() {
     atualizarSenha.mutate({ senhaAtual, novaSenha });
   };
 
-  const handleFotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setFotoPerfil(reader.result as string);
-      reader.readAsDataURL(file);
+    if (!file) return;
+    
+    // Validar tamanho (2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      showError("A imagem deve ter no máximo 2MB");
+      return;
+    }
+    
+    // Validar tipo
+    if (!["image/jpeg", "image/png", "image/jpg"].includes(file.type)) {
+      showError("Formato não permitido. Use JPG ou PNG.");
+      return;
+    }
+    
+    setUploading(true);
+    
+    const formData = new FormData();
+    formData.append("avatar", file);
+    
+    try {
+      await atualizarAvatar.mutateAsync(formData);
+    } catch (error) {
+      // Erro já tratado no mutation
     }
   };
 
@@ -105,11 +138,25 @@ export default function AlunoPerfil() {
           <div className="flex flex-col items-center text-center pb-6 border-b border-slate-100 dark:border-slate-800">
             <div className="relative mb-3">
               <div className="size-24 rounded-full overflow-hidden border-4 border-indigo-50 dark:border-indigo-900/30 flex items-center justify-center bg-slate-100 dark:bg-slate-800">
-                {fotoPerfil || me?.avatarUrl ? <img src={fotoPerfil || me?.avatarUrl} alt="Avatar" className="w-full h-full object-cover" /> : <MobileAvatar name={me?.nome || "?"} size="lg" />}
+                {me?.avatarUrl ? (
+                  <img src={me.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <MobileAvatar name={me?.nome || "?"} size="lg" />
+                )}
               </div>
-              <label className="absolute bottom-0 right-0 size-8 bg-primary text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white dark:border-slate-900 cursor-pointer">
-                <span className="material-symbols-outlined text-sm">photo_camera</span>
-                <input type="file" accept="image/*" onChange={handleFotoUpload} className="hidden" />
+              <label className="absolute bottom-0 right-0 size-8 bg-primary text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white dark:border-slate-900 cursor-pointer hover:bg-primary-dark transition-colors disabled:opacity-50">
+                {uploading ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                ) : (
+                  <span className="material-symbols-outlined text-sm">photo_camera</span>
+                )}
+                <input 
+                  type="file" 
+                  accept="image/jpeg,image/png,image/jpg" 
+                  onChange={handleFotoUpload} 
+                  className="hidden" 
+                  disabled={uploading}
+                />
               </label>
             </div>
             <h2 className="text-xl font-black text-slate-900 dark:text-white">{me?.nome || "Carregando..."}</h2>

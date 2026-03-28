@@ -18,6 +18,8 @@ import caixaRoutes from "./routes/caixa.js";
 import salasRoutes from "./routes/salas.js";
 import googleCalendarRoutes from "./routes/googleCalendar.js";
 import "express-session";
+import uploadRoutes from "./routes/upload.js";
+import rankingRoutes from "./routes/ranking.js";
 
 config();
 
@@ -39,8 +41,8 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servir uploads (comprovantes etc.) — disponível em dev e produção
-app.use("/api/uploads", express.static(path.join(__dirname, "../uploads")));
+// Servir arquivos estáticos da pasta uploads na raiz (sem prefixo /api)
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.use(session({
   store: new PgSession({
@@ -69,6 +71,9 @@ app.use("/api/caixa", caixaRoutes);
 app.use("/api/salas", salasRoutes);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/google-calendar", googleCalendarRoutes);
+app.use("/api/upload", uploadRoutes);
+app.use("/api/ranking", rankingRoutes);
+
 
 
 // Health check

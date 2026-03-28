@@ -15,21 +15,60 @@ import {
   marcarRifaComoSorteada,
   getAlunos
 } from "../storage.js";
+import { db } from "../db.js";
+import { ticketsRifa, rifas, usuarios } from "../../shared/schema.js";
+import { eq, desc, and } from "drizzle-orm";
 
 const router = Router();
 
 // GET /api/rifas - Listar todas as rifas da sala
 router.get("/", requireAuth, async (req, res) => {
   try {
-    const salaId = parseInt(req.query.salaId as string) || req.session.salaId;
-    if (!salaId) {
-      return res.status(400).json({ message: "salaId é obrigatório" });
+    const querySalaId = req.query.salaId ? parseInt(req.query.salaId as string) : null;
+    const salaId = querySalaId && !isNaN(querySalaId) ? querySalaId : req.session.salaId;
+    
+    if (!salaId || isNaN(salaId)) {
+      return res.status(400).json({ message: "salaId é obrigatório e deve ser um número válido" });
     }
     
-    const rifas = await getRifasBySala(salaId);
-    res.json(rifas);
+    const rifasList = await getRifasBySala(salaId);
+    res.json(rifasList);
   } catch (error) {
     console.error("Erro ao buscar rifas:", error);
+    res.status(500).json({ message: "Erro interno" });
+  }
+});
+
+// GET /api/rifas/tickets - Listar todos os tickets da sala (para admin)
+router.get("/tickets", requireAdmin, async (req: any, res: any) => {
+  try {
+    const salaId = req.session.salaId;
+    
+    const tickets = await db
+      .select({
+        id: ticketsRifa.id,
+        rifaId: ticketsRifa.rifaId,
+        vendedorId: ticketsRifa.vendedorId,
+        vendedorNome: usuarios.nome,
+        compradorNome: ticketsRifa.compradorNome,
+        compradorContato: ticketsRifa.compradorContato,
+        valor: ticketsRifa.valor,
+        numero: ticketsRifa.numero,
+        status: ticketsRifa.status,
+        createdAt: ticketsRifa.createdAt,
+        updatedAt: ticketsRifa.updatedAt,
+        rifaNome: rifas.nome,
+        rifaPremio: rifas.premio
+      })
+      .from(ticketsRifa)
+      .leftJoin(usuarios, eq(ticketsRifa.vendedorId, usuarios.id))
+      .leftJoin(rifas, eq(ticketsRifa.rifaId, rifas.id))
+      .where(eq(rifas.salaId, salaId))
+      .orderBy(desc(ticketsRifa.createdAt));
+    
+    res.json(tickets);
+  } catch (error) {
+    console.error("Erro ao buscar tickets da sala:", error);
     res.status(500).json({ message: "Erro interno" });
   }
 });
@@ -38,7 +77,16 @@ router.get("/", requireAuth, async (req, res) => {
 router.get("/:id", requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
+    
+    if (isNaN(id) || id <= 0) {
+      return res.status(400).json({ message: "ID inválido" });
+    }
+    
     const salaId = req.session.salaId;
+    
+    if (!salaId) {
+      return res.status(401).json({ message: "Não autorizado" });
+    }
     
     const rifa = await getRifaById(id);
     
@@ -117,7 +165,7 @@ router.put("/:id", requireAdmin, async (req, res) => {
   }
 });
 
-// DELETE /api/rifas/:id - Deletar rifa (CORRIGIDO)
+// DELETE /api/rifas/:id - Deletar rifa
 router.delete("/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
@@ -138,11 +186,9 @@ router.delete("/:id", requireAdmin, async (req, res) => {
       return res.status(403).json({ message: "Acesso negado" });
     }
 
-    // Deletar todos os tickets associados primeiro
     await deleteRifa(id);
     console.log(`[DELETE] Rifa ${id} deletada com sucesso`);
     
-    // Retornar 204 No Content para sucesso sem corpo
     res.status(204).send();
   } catch (error: any) {
     console.error("Erro ao deletar rifa:", error);
@@ -178,11 +224,10 @@ router.get("/meus-tickets", requireAuth, async (req, res) => {
 router.post("/:id/tickets", requireAuth, async (req, res) => {
   try {
     const rifaId = parseInt(req.params.id);
-    const vendedorId = req.session.userId!;
-    const { compradorNome, compradorContato, valor, numero } = req.body;
+    const { compradorNome, compradorContato, valor, numero, vendedorId } = req.body; // ← pega do body
 
-    if (!compradorNome || !valor || !numero) {
-      return res.status(400).json({ message: "Nome do comprador, valor e número são obrigatórios" });
+    if (!compradorNome || !valor || !numero || !vendedorId) {
+      return res.status(400).json({ message: "Nome do comprador, valor, número e vendedor são obrigatórios" });
     }
 
     // Verificar se o número já está ocupado
@@ -195,7 +240,7 @@ router.post("/:id/tickets", requireAuth, async (req, res) => {
 
     const novoTicket = await createTicket({
       rifaId,
-      vendedorId,
+      vendedorId, // ← usa o vendedorId do body
       compradorNome,
       compradorContato: compradorContato || null,
       valor: valor.toString(),
@@ -215,7 +260,6 @@ router.put("/tickets/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { compradorNome, compradorContato, vendedorId, valor, status } = req.body;
-    const salaId = req.session.salaId;
 
     if (!compradorNome || !vendedorId || !valor) {
       return res.status(400).json({ message: "Nome do comprador, vendedor e valor são obrigatórios" });
@@ -236,33 +280,10 @@ router.put("/tickets/:id", requireAdmin, async (req, res) => {
   }
 });
 
-// PATCH /api/rifas/tickets/:id
-router.patch("/tickets/:id", requireAdmin, async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const { status } = req.body;
-    
-    console.log(`[PATCH] Atualizando ticket ${id} para status: ${status}`);
-
-    if (!status) {
-      return res.status(400).json({ message: "Status é obrigatório" });
-    }
-
-    const ticketAtualizado = await updateTicket(id, status);
-    console.log(`[PATCH] Ticket ${id} atualizado com sucesso`);
-    res.json(ticketAtualizado);
-  } catch (error: any) {
-    console.error("Erro ao atualizar ticket:", error);
-    res.status(400).json({ message: error.message || "Erro ao atualizar ticket" });
-  }
-});
-
 // DELETE /api/rifas/tickets/:id - Deletar ticket
 router.delete("/tickets/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const salaId = req.session.salaId;
-
     await deleteTicket(id);
     res.status(204).send();
   } catch (error: any) {
@@ -297,7 +318,6 @@ router.post("/:id/sortear", requireAdmin, async (req, res) => {
       return res.status(400).json({ message: "Nenhum ticket pago para sortear" });
     }
 
-    // Sortear um índice aleatório
     const indiceSorteado = Math.floor(Math.random() * ticketsPagos.length);
     const vencedor = ticketsPagos[indiceSorteado];
     

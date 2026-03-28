@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import MobileLayout from "../../components/layout/MobileLayout";
 import MobileHeader from "../../components/layout/MobileHeader";
-import MobileCard from "../../components/ui/MobileCard";
 import MobileButton from "../../components/ui/MobileButton";
 import MobileInput from "../../components/ui/MobileInput";
 import MobileBadge from "../../components/ui/MobileBadge";
@@ -13,8 +12,8 @@ import { apiRequest } from "../../lib/queryClient";
 import { formatDate } from "../../components/shared/DateFormat";
 import { useAuth } from "../../hooks/useAuth";
 import LocationPicker from "../../components/ui/LocationPicker";
-import EventCalendar from "../../components/ui/EventCalendar";
-import EventDetailsModal from "../../components/ui/EventDetailsModal";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, addMonths, subMonths } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface Evento {
   id: number;
@@ -24,17 +23,7 @@ interface Evento {
   tipo: string;
   local?: string;
   status: string;
-  foto?: string;
 }
-
-const tipoLabel: Record<string, string> = {
-  formatura: "🎓 Formatura",
-  ensaio: "📸 Ensaio",
-  reuniao: "👥 Reunião",
-  festa: "🎉 Festa",
-  meta: "🎯 Meta",
-  outro: "📌 Outro",
-};
 
 const tipoColors: Record<string, string> = {
   formatura: "bg-purple-500",
@@ -45,11 +34,24 @@ const tipoColors: Record<string, string> = {
   outro: "bg-gray-500",
 };
 
+const tipoLabel: Record<string, string> = {
+  formatura: "Formatura",
+  ensaio: "Ensaio",
+  reuniao: "Reunião",
+  festa: "Festa",
+  meta: "Meta",
+  outro: "Outro",
+};
+
 export default function AdminEventos() {
   const { auth } = useAuth();
   const qc = useQueryClient();
   const formSheet = useBottomSheet();
+  const detailSheet = useBottomSheet();
   const [error, setError] = useState("");
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedEvent, setSelectedEvent] = useState<Evento | null>(null);
+  const [editingEvento, setEditingEvento] = useState<Evento | null>(null);
 
   // Form
   const [titulo, setTitulo] = useState("");
@@ -57,16 +59,8 @@ export default function AdminEventos() {
   const [data, setData] = useState("");
   const [tipo, setTipo] = useState("outro");
   const [local, setLocal] = useState("");
-  const [foto, setFoto] = useState<File | null>(null);
-  const [fotoPreview, setFotoPreview] = useState("");
-  
-  // Calendar
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [selectedDayEvents, setSelectedDayEvents] = useState<Evento[]>([]);
-  const [selectedDayDate, setSelectedDayDate] = useState<Date | null>(null);
-  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
 
-  const { data: eventos = [], isLoading } = useQuery<Evento[]>({
+  const { data: eventos = [], isLoading, refetch } = useQuery<Evento[]>({
     queryKey: ["eventos", auth?.salaId],
     queryFn: () => apiRequest("GET", `/eventos?salaId=${auth?.salaId}`),
     enabled: !!auth?.salaId,
@@ -77,13 +71,19 @@ export default function AdminEventos() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["eventos"] });
       formSheet.close();
-      setTitulo("");
-      setDescricao("");
-      setData("");
-      setTipo("outro");
-      setLocal("");
-      setFoto(null);
-      setFotoPreview("");
+      resetForm();
+      setError("");
+    },
+    onError: (e: any) => setError(e.message),
+  });
+
+  const atualizar = useMutation({
+    mutationFn: ({ id, ...data }: any) => apiRequest("PUT", `/eventos/${id}`, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["eventos"] });
+      formSheet.close();
+      resetForm();
+      setEditingEvento(null);
       setError("");
     },
     onError: (e: any) => setError(e.message),
@@ -92,195 +92,254 @@ export default function AdminEventos() {
   const deletar = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/eventos/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["eventos"] }),
+    onError: (e: any) => setError(e.message),
   });
 
-  const handleFotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFoto(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFotoPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+  const resetForm = () => {
+    setTitulo("");
+    setDescricao("");
+    setData("");
+    setTipo("outro");
+    setLocal("");
+    setEditingEvento(null);
   };
 
-  const criarComFoto = async () => {
-    let fotoUrl = "";
-    if (foto) {
-      const formData = new FormData();
-      formData.append("foto", foto);
-      const response = await apiRequest("POST", "/upload", formData);
-      fotoUrl = response.url;
+  const handleEdit = (evento: Evento) => {
+    setEditingEvento(evento);
+    setTitulo(evento.titulo);
+    setDescricao(evento.descricao || "");
+    setData(evento.data.split("T")[0]);
+    setTipo(evento.tipo);
+    setLocal(evento.local || "");
+    formSheet.open();
+  };
+
+  const getEventosDoDia = (date: Date) => {
+    return eventos.filter(evento => isSameDay(new Date(evento.data), date));
+  };
+
+  // Calendário
+  const monthStart = startOfMonth(currentMonth);
+  const monthEnd = endOfMonth(currentMonth);
+  const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
+  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+  const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+
+  const previousMonth = () => setCurrentMonth(prev => subMonths(prev, 1));
+  const nextMonth = () => setCurrentMonth(prev => addMonths(prev, 1));
+
+  const weekDays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+  const handleCreateOrUpdate = () => {
+    if (!titulo || !data) {
+      setError("Título e data são obrigatórios");
+      return;
     }
-    
-    criar.mutate({ 
+
+    // Validar data
+    const dataObj = new Date(data);
+    if (isNaN(dataObj.getTime())) {
+      setError("Data inválida");
+      return;
+    }
+
+    const dados = { 
       titulo, 
       descricao, 
-      data, 
+      data: dataObj.toISOString(),
       tipo, 
       local: local || null, 
       status: "planejado",
       salaId: auth?.salaId,
-      foto: fotoUrl
-    });
-  };
+    };
 
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-
-  const futuros = eventos.filter((e: Evento) => new Date(e.data) >= hoje).sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime());
-  const passados = eventos.filter((e: Evento) => new Date(e.data) < hoje).sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
-
-  const EventoCard = ({ evento }: { evento: Evento }) => {
-    const d = new Date(evento.data);
-    const isPassado = d < hoje;
-    const dias = Math.ceil((d.getTime() - hoje.getTime()) / 86400000);
-    
-    return (
-      <MobileCard className={`p-4 ${isPassado ? "opacity-60" : ""} hover:shadow-md transition-all`}>
-        <div className="flex items-start gap-3">
-          {evento.foto ? (
-            <img 
-              src={evento.foto} 
-              alt={evento.titulo}
-              className="size-12 rounded-2xl object-cover flex-shrink-0"
-            />
-          ) : (
-            <div className="size-12 rounded-2xl bg-primary/10 dark:bg-primary/20 flex flex-col items-center justify-center flex-shrink-0">
-              <span className="text-lg font-black text-primary dark:text-primary">{d.getDate()}</span>
-              <span className="text-[9px] uppercase font-bold text-primary/70">{d.toLocaleString("pt-BR", { month: "short" })}</span>
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-bold text-slate-900 dark:text-white">{evento.titulo}</p>
-              <MobileBadge variant="neutral" className="text-[10px]">
-                {tipoLabel[evento.tipo] || evento.tipo}
-              </MobileBadge>
-            </div>
-            {evento.descricao && <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{evento.descricao}</p>}
-            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-              {evento.local && (
-                <span className="text-xs text-slate-400 flex items-center gap-0.5">
-                  <span className="material-symbols-outlined text-xs">location_on</span>{evento.local}
-                </span>
-              )}
-              {!isPassado && dias >= 0 && (
-                <span className={`text-xs font-semibold ${
-                  dias === 0 ? "text-gold dark:text-gold" : 
-                  dias <= 3 ? "text-danger" : 
-                  "text-success"
-                }`}>
-                  {dias === 0 ? "🔥 Hoje" : `📅 Em ${dias} dias`}
-                </span>
-              )}
-            </div>
-          </div>
-          <button 
-            onClick={() => { if (confirm("Excluir evento?")) deletar.mutate(evento.id); }}
-            className="p-1.5 text-slate-400 hover:text-danger rounded-lg transition-colors active:scale-90"
-          >
-            <span className="material-symbols-outlined text-lg">delete</span>
-          </button>
-        </div>
-      </MobileCard>
-    );
+    if (editingEvento) {
+      atualizar.mutate({ id: editingEvento.id, ...dados });
+    } else {
+      criar.mutate(dados);
+    }
   };
 
   return (
     <MobileLayout role="admin">
-      <MobileHeader 
-        title="Eventos" 
-        subtitle="Calendário da turma" 
-        gradient
-        actions={[{ icon: "add_circle", onClick: formSheet.open, label: "Novo" }]} 
-      />
+      <MobileHeader title="Eventos" subtitle="Calendário da turma" gradient />
 
-      <div className="px-4 py-4 space-y-4">
-        {/* Botão de alternar visualização */}
-        <div className="flex justify-end">
-          <button
-            onClick={() => setCalendarOpen(!calendarOpen)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gold/10 text-gold rounded-lg text-sm transition-colors hover:bg-gold/20"
-          >
-            <span className="material-symbols-outlined text-sm">
-              {calendarOpen ? "list" : "calendar_month"}
-            </span>
-            {calendarOpen ? "Lista" : "Calendário"}
-          </button>
-        </div>
-
+      <div className="px-4 py-4">
         {isLoading ? (
           <div className="space-y-3">
-            {[1,2,3].map((i) => <Skeleton key={i} variant="card" />)}
+            {[1, 2, 3].map((i) => <Skeleton key={i} variant="card" />)}
           </div>
-        ) : calendarOpen ? (
-          
-        <EventCalendar 
-          events={eventos as any}  // ou ajuste o tipo do evento
-          onDayClick={(date: Date, events: any[]) => {
-            setSelectedDayDate(date);
-            setSelectedDayEvents(events as Evento[]);
-            setDetailsModalOpen(true);
-          }} 
-        />
         ) : (
-          <>
-            {futuros.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="material-symbols-outlined text-gold text-lg">event_upcoming</span>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Próximos Eventos</p>
-                  <MobileBadge variant="gold" className="text-[10px]">{futuros.length}</MobileBadge>
-                </div>
-                <div className="space-y-2">
-                  {futuros.map((e: Evento) => <EventoCard key={e.id} evento={e} />)}
-                </div>
-              </div>
-            )}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-sm">
+            {/* Header do calendário */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+              <button
+                onClick={previousMonth}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <span className="material-symbols-outlined">chevron_left</span>
+              </button>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                {format(currentMonth, "MMMM yyyy", { locale: ptBR })}
+              </h3>
+              <button
+                onClick={nextMonth}
+                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <span className="material-symbols-outlined">chevron_right</span>
+              </button>
+            </div>
 
-            {passados.length > 0 && (
-              <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="material-symbols-outlined text-slate-400 text-lg">history</span>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Eventos Passados</p>
-                  <MobileBadge variant="neutral" className="text-[10px]">{passados.length}</MobileBadge>
+            {/* Dias da semana */}
+            <div className="grid grid-cols-7 gap-px bg-slate-100 dark:bg-slate-800">
+              {weekDays.map(day => (
+                <div key={day} className="py-2 text-center text-xs font-medium text-slate-500">
+                  {day}
                 </div>
-                <div className="space-y-2">
-                  {passados.map((e: Evento) => <EventoCard key={e.id} evento={e} />)}
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
 
-            {eventos.length === 0 && (
-              <MobileCard className="text-center py-12">
-                <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-5xl">event</span>
-                <p className="text-slate-500 mt-3 text-sm">Nenhum evento cadastrado</p>
-                <MobileButton variant="primary" size="sm" icon="add_circle" className="mt-3" onClick={formSheet.open}>
-                  Criar evento
-                </MobileButton>
-              </MobileCard>
-            )}
-          </>
+            {/* Dias do mês */}
+            <div className="grid grid-cols-7 gap-px bg-slate-100 dark:bg-slate-800">
+              {calendarDays.map((day, idx) => {
+                const isCurrentMonth = isSameMonth(day, currentMonth);
+                const isToday = isSameDay(day, new Date());
+                const dayEvents = getEventosDoDia(day);
+                const hasEvents = dayEvents.length > 0;
+
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      if (dayEvents.length === 1) {
+                        setSelectedEvent(dayEvents[0]);
+                        detailSheet.open();
+                      } else if (dayEvents.length > 1) {
+                        setSelectedEvent(null);
+                        detailSheet.open();
+                      }
+                    }}
+                    className={`
+                      min-h-[80px] p-2 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors
+                      ${!isCurrentMonth ? "opacity-40" : ""}
+                      ${isToday ? "bg-gold/5 border-2 border-gold/30" : ""}
+                    `}
+                  >
+                    <div className="flex flex-col items-center">
+                      <span className={`
+                        text-sm font-medium
+                        ${isToday ? "text-gold font-bold" : "text-slate-700 dark:text-slate-300"}
+                      `}>
+                        {format(day, "d")}
+                      </span>
+                      {hasEvents && (
+                        <div className="mt-1 space-y-0.5 w-full">
+                          {dayEvents.slice(0, 2).map(event => (
+                            <div
+                              key={event.id}
+                              className={`h-1.5 rounded-full ${tipoColors[event.tipo] || "bg-gray-500"}`}
+                              title={event.titulo}
+                            />
+                          ))}
+                          {dayEvents.length > 2 && (
+                            <div className="text-[10px] text-center text-slate-400">
+                              +{dayEvents.length - 2}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Modal de detalhes do evento */}
-      <EventDetailsModal 
-        isOpen={detailsModalOpen}
-        onClose={() => {
-          setDetailsModalOpen(false);
-          setSelectedDayEvents([]);
-          setSelectedDayDate(null);
+      {/* Botão flutuante + */}
+      <button
+        onClick={() => {
+          resetForm();
+          formSheet.open();
         }}
-        events={selectedDayEvents}
-        selectedDate={selectedDayDate || new Date()}
-      />
+        className="fixed bottom-20 right-4 w-14 h-14 bg-gold rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform z-40"
+      >
+        <span className="material-symbols-outlined text-white text-2xl">add</span>
+      </button>
 
-      {/* Bottom Sheet para criar evento */}
-      <BottomSheet isOpen={formSheet.isOpen} onClose={formSheet.close} title="Novo Evento" maxHeight="85vh">
+      {/* Modal de detalhes do evento */}
+      <BottomSheet isOpen={detailSheet.isOpen} onClose={detailSheet.close} title={selectedEvent?.titulo || "Eventos do dia"} maxHeight="70vh">
+        {selectedEvent ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className={`w-3 h-3 rounded-full ${tipoColors[selectedEvent.tipo] || "bg-gray-500"}`} />
+              <span className="text-sm text-slate-500">{tipoLabel[selectedEvent.tipo] || selectedEvent.tipo}</span>
+            </div>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              {formatDate(selectedEvent.data)}
+            </p>
+            {selectedEvent.local && (
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <span className="material-symbols-outlined text-sm">location_on</span>
+                {selectedEvent.local}
+              </div>
+            )}
+            {selectedEvent.descricao && (
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                <p className="text-sm text-slate-600 dark:text-slate-400">{selectedEvent.descricao}</p>
+              </div>
+            )}
+            <div className="flex gap-2 pt-2">
+              <MobileButton 
+                variant="secondary" 
+                fullWidth 
+                icon="edit"
+                onClick={() => {
+                  detailSheet.close();
+                  handleEdit(selectedEvent);
+                }}
+              >
+                Editar
+              </MobileButton>
+              <MobileButton 
+                variant="danger" 
+                fullWidth 
+                icon="delete"
+                onClick={() => {
+                  if (confirm("Excluir evento?")) {
+                    deletar.mutate(selectedEvent.id);
+                    detailSheet.close();
+                  }
+                }}
+              >
+                Excluir
+              </MobileButton>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {getEventosDoDia(currentMonth).map(event => (
+              <div
+                key={event.id}
+                onClick={() => {
+                  setSelectedEvent(event);
+                }}
+                className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700"
+              >
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${tipoColors[event.tipo] || "bg-gray-500"}`} />
+                  <span className="font-medium text-sm">{event.titulo}</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">{formatDate(event.data)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </BottomSheet>
+
+      {/* Bottom Sheet para criar/editar evento */}
+      <BottomSheet isOpen={formSheet.isOpen} onClose={() => { formSheet.close(); resetForm(); }} title={editingEvento ? "Editar Evento" : "Novo Evento"} maxHeight="85vh">
         <div className="space-y-4 pb-20">
           <MobileInput 
             label="Título" 
@@ -300,12 +359,12 @@ export default function AdminEventos() {
               onChange={(e) => setTipo(e.target.value)} 
               className="w-full px-4 py-2.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-gold/50 appearance-none"
             >
-              <option value="formatura">🎓 Dia da formatura</option>
-              <option value="ensaio">🚌 Visita</option>
-              <option value="reuniao">👥 Reunião</option>
-              <option value="festa">🎉 Trote</option>
-              <option value="meta">🎯 Meta</option>
-              <option value="outro">📌 Outro</option>
+              <option value="formatura">Formatura</option>
+              <option value="ensaio">Visita</option>
+              <option value="reuniao">Reunião</option>
+              <option value="festa">Trote</option>
+              <option value="meta">Meta</option>
+              <option value="outro">Outro</option>
             </select>
           </div>
           
@@ -333,43 +392,20 @@ export default function AdminEventos() {
               placeholder="Detalhes do evento..."
             />
           </div>
-
-          <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Foto do Evento</label>
-            <div className="flex items-center gap-3">
-              {fotoPreview ? (
-                <div className="relative">
-                  <img src={fotoPreview} alt="Preview" className="w-20 h-20 rounded-lg object-cover" />
-                  <button
-                    onClick={() => { setFoto(null); setFotoPreview(""); }}
-                    className="absolute -top-2 -right-2 p-1 bg-danger text-white rounded-full"
-                  >
-                    <span className="material-symbols-outlined text-sm">close</span>
-                  </button>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-lg cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border-2 border-dashed border-gold/30">
-                  <span className="material-symbols-outlined text-2xl text-gold">add_photo_alternate</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleFotoUpload} />
-                </label>
-              )}
-              <p className="text-xs text-slate-500 flex-1">Adicione uma foto para o evento (opcional)</p>
-            </div>
-          </div>
           
           {error && <p className="text-sm text-danger">{error}</p>}
           
           <div className="grid grid-cols-2 gap-3 pt-2">
-            <MobileButton variant="secondary" fullWidth onClick={formSheet.close}>
+            <MobileButton variant="secondary" fullWidth onClick={() => { formSheet.close(); resetForm(); }}>
               Cancelar
             </MobileButton>
             <MobileButton 
               variant="gold" 
               fullWidth 
-              loading={criar.isPending}
-              onClick={criarComFoto}
+              loading={criar.isPending || atualizar.isPending}
+              onClick={handleCreateOrUpdate}
             >
-              Criar Evento
+              {editingEvento ? "Atualizar" : "Criar Evento"}
             </MobileButton>
           </div>
         </div>

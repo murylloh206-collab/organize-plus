@@ -81,9 +81,23 @@ export async function updateUser(id: number, data: Partial<{
 }
 
 export async function deleteUser(id: number) {
-  await db
-    .delete(usuarios)
-    .where(eq(usuarios.id, id));
+  try {
+    console.log(`[Storage.deleteUser] Deletando usuário ID: ${id}`);
+    
+    // Primeiro deletar tickets associados ao aluno
+    await db.delete(ticketsRifa).where(eq(ticketsRifa.vendedorId, id));
+    
+    // Depois deletar pagamentos associados
+    await db.delete(pagamentos).where(eq(pagamentos.usuarioId, id));
+    
+    // Por fim deletar o usuário
+    await db.delete(usuarios).where(eq(usuarios.id, id));
+    
+    console.log(`[Storage.deleteUser] Usuário ${id} deletado com sucesso`);
+  } catch (error) {
+    console.error(`[Storage.deleteUser] Erro ao deletar usuário ${id}:`, error);
+    throw error;
+  }
 }
 
 // ---------- SALAS ----------
@@ -118,6 +132,9 @@ export async function getRifasBySala(salaId: number) {
 }
 
 export async function getRifaById(id: number) {
+  if (isNaN(id) || id <= 0) {
+    return null;
+  }
   const [rifa] = await db.select().from(rifas).where(eq(rifas.id, id)).limit(1);
   return rifa;
 }
@@ -359,22 +376,36 @@ export async function updateTicketData(id: number, data: {
 }
 
 export async function deleteTicket(id: number) {
-  const [ticket] = await db
-    .select()
-    .from(ticketsRifa)
-    .where(eq(ticketsRifa.id, id))
-    .limit(1);
+  try {
+    console.log(`[Storage.deleteTicket] Deletando ticket ID: ${id}`);
+    
+    const [ticket] = await db
+      .select()
+      .from(ticketsRifa)
+      .where(eq(ticketsRifa.id, id))
+      .limit(1);
 
-  if (!ticket) {
-    throw new Error("Ticket não encontrado");
+    if (!ticket) {
+      console.log(`[Storage.deleteTicket] Ticket ${id} não encontrado`);
+      throw new Error("Ticket não encontrado");
+    }
+
+    console.log(`[Storage.deleteTicket] Ticket encontrado: vendedorId=${ticket.vendedorId}, rifaId=${ticket.rifaId}`);
+
+    await db
+      .delete(ticketsRifa)
+      .where(eq(ticketsRifa.id, id));
+
+    // Atualizar valores após deletar
+    await atualizarValorArrecadadoAluno(ticket.vendedorId);
+    await atualizarArrecadacaoRifa(ticket.rifaId);
+    
+    console.log(`[Storage.deleteTicket] Ticket ${id} deletado com sucesso`);
+    return { success: true };
+  } catch (error) {
+    console.error(`[Storage.deleteTicket] Erro ao deletar ticket ${id}:`, error);
+    throw error;
   }
-
-  await db
-    .delete(ticketsRifa)
-    .where(eq(ticketsRifa.id, id));
-
-  await atualizarValorArrecadadoAluno(ticket.vendedorId);
-  await atualizarArrecadacaoRifa(ticket.rifaId);
 }
 
 export async function getAlunos(salaId: number) {
@@ -476,12 +507,17 @@ export async function createPagamento(data: {
   });
 }
 
+// No storage.ts, atualize a função updatePagamento
 export async function updatePagamento(id: number, data: {
   status?: "pendente" | "pago" | "atrasado";
   dataPagamento?: Date;
   formaPagamento?: string;
   comprovanteUrl?: string;
   descricaoPagamento?: string;
+  statusComprovante?: "nenhum" | "pendente" | "aprovado" | "rejeitado";
+  motivoRejeicao?: string;
+  analisadoPor?: number;
+  analisadoEm?: Date;
 }) {
   const updateData: any = {};
   if (data.status !== undefined) updateData.status = data.status;
@@ -489,6 +525,10 @@ export async function updatePagamento(id: number, data: {
   if (data.formaPagamento !== undefined) updateData.formaPagamento = data.formaPagamento;
   if (data.comprovanteUrl !== undefined) updateData.comprovanteUrl = data.comprovanteUrl;
   if (data.descricaoPagamento !== undefined) updateData.descricaoPagamento = data.descricaoPagamento;
+  if (data.statusComprovante !== undefined) updateData.statusComprovante = data.statusComprovante;
+  if (data.motivoRejeicao !== undefined) updateData.motivoRejeicao = data.motivoRejeicao;
+  if (data.analisadoPor !== undefined) updateData.analisadoPor = data.analisadoPor;
+  if (data.analisadoEm !== undefined) updateData.analisadoEm = data.analisadoEm;
   updateData.updatedAt = new Date();
 
   const [pagamento] = await db.update(pagamentos)
@@ -597,6 +637,7 @@ export async function createEvento(data: {
   tipo?: string;
   status?: "planejado" | "realizado" | "cancelado";
   salaId: number;
+  foto?: string; // ← ADICIONE ESTE CAMPO
 }) {
   const [ev] = await db.insert(eventos).values({
     titulo: data.titulo,
@@ -606,6 +647,7 @@ export async function createEvento(data: {
     tipo: data.tipo || "evento",
     status: (data.status || "planejado") as "planejado" | "realizado" | "cancelado",
     salaId: data.salaId,
+    foto: data.foto || null, // ← ADICIONE ESTA LINHA
     createdAt: new Date(),
     updatedAt: new Date()
   }).returning();
@@ -886,18 +928,54 @@ export async function getSaldoCaixa(salaId: number) {
 }
 
 // ---------- DASHBOARD STATS ----------
+// ---------- DASHBOARD STATS ----------
 export async function getDashboardStats(salaId: number) {
+  console.log("=== DEBUG DASHBOARD ===");
+  console.log("salaId:", salaId);
+  
+  // Soma pagamentos
   const [pagsResult] = await db
     .select({
-      total: sql<string>`SUM(CASE WHEN status = 'pago' THEN valor::numeric ELSE 0 END)`.as("total"),
+      total: sql<string>`SUM(CASE WHEN LOWER(status::text) = 'pago' THEN valor::numeric ELSE 0 END)`.as("total"),
     })
-    .from(pagamentos).where(eq(pagamentos.salaId, salaId));
-
+    .from(pagamentos)
+    .where(eq(pagamentos.salaId, salaId));
+  
+  console.log("Pagamentos result:", pagsResult);
+  
+  // Contagem de alunos
   const [alunosResult] = await db
     .select({ count: sql<string>`COUNT(*)`.as("count") })
     .from(usuarios)
     .where(and(eq(usuarios.salaId, salaId), eq(usuarios.role, "aluno")));
-
+  
+  console.log("Alunos result:", alunosResult);
+  
+  // Teste direto: buscar todos os tickets pagos
+  const ticketsPagos = await db
+    .select({
+      id: ticketsRifa.id,
+      valor: ticketsRifa.valor,
+      status: ticketsRifa.status,
+      rifaId: ticketsRifa.rifaId,
+    })
+    .from(ticketsRifa)
+    .innerJoin(rifas, eq(ticketsRifa.rifaId, rifas.id))
+    .where(and(
+      eq(rifas.salaId, salaId),
+      eq(ticketsRifa.status, "pago")
+    ));
+  
+  console.log("Tickets pagos (comparação direta):", ticketsPagos);
+  
+  // Calcular total manualmente
+  let totalRifasManual = 0;
+  for (const t of ticketsPagos) {
+    totalRifasManual += parseFloat(t.valor);
+  }
+  console.log("Total rifas manual:", totalRifasManual);
+  
+  // Usar a query com LOWER::text
   const [rifasResult] = await db
     .select({
       total: sql<string>`COALESCE(SUM(t.valor::numeric), 0)`.as("total"),
@@ -906,9 +984,13 @@ export async function getDashboardStats(salaId: number) {
     .innerJoin(rifas, eq(ticketsRifa.rifaId, rifas.id))
     .where(and(
       eq(rifas.salaId, salaId),
-      eq(ticketsRifa.status, "pago")
+      sql`LOWER(${ticketsRifa.status}::text) = 'pago'`
     ));
+  
+  console.log("Rifas result (com LOWER):", rifasResult);
+  console.log("Total rifas LOWER:", parseFloat(rifasResult?.total ?? "0"));
 
+  // Contagem total de tickets
   const [ticketsResult] = await db
     .select({ count: sql<string>`COUNT(*)`.as("count") })
     .from(ticketsRifa)
@@ -920,10 +1002,94 @@ export async function getDashboardStats(salaId: number) {
   const totalPagamentos = parseFloat(pagsResult?.total ?? "0");
   const totalRifas = parseFloat(rifasResult?.total ?? "0");
 
+  console.log("Total Pagamentos:", totalPagamentos);
+  console.log("Total Rifas:", totalRifas);
+  console.log("Total Arrecadado:", totalPagamentos + totalRifas);
+
   return {
     totalArrecadado: totalPagamentos + totalRifas,
     totalAlunos: parseInt(alunosResult?.count ?? "0"),
     totalTickets: parseInt(ticketsResult?.count ?? "0"),
     saldoCaixa: saldo,
   };
+}
+
+// Aprovar comprovante
+export async function aprovarComprovante(pagamentoId: number, analisadoPor: number) {
+  return await db.transaction(async (tx) => {
+    const [pagamento] = await tx.select().from(pagamentos)
+      .where(eq(pagamentos.id, pagamentoId));
+    
+    if (!pagamento) {
+      throw new Error("Pagamento não encontrado");
+    }
+    
+    if (pagamento.statusComprovante !== "pendente") {
+      throw new Error("Não há comprovante pendente para aprovação");
+    }
+    
+    // Atualiza pagamento
+    const [atualizado] = await tx.update(pagamentos)
+      .set({
+        status: "pago",
+        statusComprovante: "aprovado",
+        dataPagamento: new Date(),
+        analisadoPor,
+        analisadoEm: new Date(),
+        updatedAt: new Date()
+      })
+      .where(eq(pagamentos.id, pagamentoId))
+      .returning();
+    
+    // Atualiza evento relacionado
+    const [evento] = await tx.select().from(eventos)
+      .where(and(
+        eq(eventos.titulo, `📅 Vencimento: ${pagamento.descricao}`),
+        eq(eventos.status, "planejado")
+      ))
+      .limit(1);
+    
+    if (evento) {
+      await tx.update(eventos)
+        .set({
+          status: "realizado",
+          descricao: `${evento.descricao} - Pago em ${new Date().toLocaleDateString()}`,
+          updatedAt: new Date()
+        })
+        .where(eq(eventos.id, evento.id));
+    }
+    
+    return atualizado;
+  });
+}
+
+// Rejeitar comprovante
+export async function rejeitarComprovante(pagamentoId: number, analisadoPor: number, motivo: string) {
+  const [atualizado] = await db.update(pagamentos)
+    .set({
+      statusComprovante: "rejeitado",
+      motivoRejeicao: motivo,
+      analisadoPor,
+      analisadoEm: new Date(),
+      updatedAt: new Date()
+    })
+    .where(eq(pagamentos.id, pagamentoId))
+    .returning();
+  
+  return atualizado;
+}
+
+// Buscar pagamentos com comprovante pendente
+export async function getPagamentosComComprovantePendente(salaId: number) {
+  return db.select({
+    pagamento: pagamentos,
+    usuario: { nome: usuarios.nome, email: usuarios.email, avatarUrl: usuarios.avatarUrl },
+  })
+    .from(pagamentos)
+    .leftJoin(usuarios, eq(pagamentos.usuarioId, usuarios.id))
+    .where(and(
+      eq(pagamentos.salaId, salaId),
+      eq(pagamentos.statusComprovante, "pendente")
+    ))
+    .orderBy(pagamentos.createdAt);
 }

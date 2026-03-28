@@ -1,11 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
+import { useGlobalLoading } from "./hooks/useGlobalLoading";
+import GlobalLoading from "./components/ui/GlobalLoading";
 import TermosPage from "./pages/termos";
 import CriadorPage from "./pages/criador";
 import PrivacidadePage from "./pages/privacidade";
 import SuportePage from "./pages/suporte";
 import AdminCaixa from "./pages/admin/caixa";
-
 
 // Pages
 import HomePage from "./pages/home"; 
@@ -51,43 +52,48 @@ function RequireAuth({ children, role }: { children: React.ReactNode; role?: "ad
 }
 
 export default function App() {
+  const { isLoading: authLoading } = useAuth();
+  const { isLoading: globalLoading } = useGlobalLoading();
+
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Público */}
-        <Route path="/" element={<HomePage />} />
-        <Route path="/acesso" element={<AcessoPage />} />
-        <Route path="/cadastro" element={<AlunoCadastro />} />
-        <Route path="/termos" element={<TermosPage />} />
-        <Route path="/criador" element={<CriadorPage />} />
-        <Route path="/privacidade" element={<PrivacidadePage />} />
-        <Route path="/suporte" element={<SuportePage />} />
+    <>
+      <GlobalLoading isLoading={authLoading || globalLoading} />
+      <BrowserRouter>
+        <Routes>
+          {/* Público */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/acesso" element={<AcessoPage />} />
+          <Route path="/cadastro" element={<AlunoCadastro />} />
+          <Route path="/termos" element={<TermosPage />} />
+          <Route path="/criador" element={<CriadorPage />} />
+          <Route path="/privacidade" element={<PrivacidadePage />} />
+          <Route path="/suporte" element={<SuportePage />} />
 
-        {/* Admin (protegidas) */}
-        <Route path="/admin/create-sala" element={<RequireAuth role="admin"><CreateSalaPage /></RequireAuth>} />
-        <Route path="/admin/dashboard" element={<RequireAuth role="admin"><AdminDashboard /></RequireAuth>} />
-        <Route path="/admin/alunos" element={<RequireAuth role="admin"><AdminAlunos /></RequireAuth>} />
-        <Route path="/admin/rifas" element={<RequireAuth role="admin"><AdminRifas /></RequireAuth>} />
-        <Route path="/admin/pagamentos" element={<RequireAuth role="admin"><AdminPagamentos /></RequireAuth>} />
-        <Route path="/admin/eventos" element={<RequireAuth role="admin"><AdminEventos /></RequireAuth>} />
-        <Route path="/admin/metas" element={<RequireAuth role="admin"><AdminMetas /></RequireAuth>} /> 
-        <Route path="/admin/metas/:id" element={<RequireAuth role="admin"><AdminMetas /></RequireAuth>} /> 
-        <Route path="/admin/ranking" element={<RequireAuth role="admin"><AdminRanking /></RequireAuth>} />
-        <Route path="/admin/relatorios" element={<RequireAuth role="admin"><AdminRelatorios /></RequireAuth>} />
-        <Route path="/admin/configuracoes" element={<RequireAuth role="admin"><AdminConfiguracoes /></RequireAuth>} />
-        <Route path="/admin/caixa" element={<RequireAuth role="admin"><AdminCaixa /></RequireAuth>} />
+          {/* Admin (protegidas) */}
+          <Route path="/admin/create-sala" element={<RequireAuth role="admin"><CreateSalaPage /></RequireAuth>} />
+          <Route path="/admin/dashboard" element={<RequireAuth role="admin"><AdminDashboard /></RequireAuth>} />
+          <Route path="/admin/alunos" element={<RequireAuth role="admin"><AdminAlunos /></RequireAuth>} />
+          <Route path="/admin/rifas" element={<RequireAuth role="admin"><AdminRifas /></RequireAuth>} />
+          <Route path="/admin/pagamentos" element={<RequireAuth role="admin"><AdminPagamentos /></RequireAuth>} />
+          <Route path="/admin/eventos" element={<RequireAuth role="admin"><AdminEventos /></RequireAuth>} />
+          <Route path="/admin/metas" element={<RequireAuth role="admin"><AdminMetas /></RequireAuth>} /> 
+          <Route path="/admin/metas/:id" element={<RequireAuth role="admin"><AdminMetas /></RequireAuth>} /> 
+          <Route path="/admin/ranking" element={<RequireAuth role="admin"><AdminRanking /></RequireAuth>} />
+          <Route path="/admin/relatorios" element={<RequireAuth role="admin"><AdminRelatorios /></RequireAuth>} />
+          <Route path="/admin/configuracoes" element={<RequireAuth role="admin"><AdminConfiguracoes /></RequireAuth>} />
+          <Route path="/admin/caixa" element={<RequireAuth role="admin"><AdminCaixa /></RequireAuth>} />
 
+          {/* Aluno */}
+          <Route path="/aluno/dashboard" element={<RequireAuth role="aluno"><AlunoDashboard /></RequireAuth>} />
+          <Route path="/aluno/rifas" element={<RequireAuth role="aluno"><AlunoRifas /></RequireAuth>} />
+          <Route path="/aluno/pagamentos" element={<RequireAuth role="aluno"><AlunoPagamentos /></RequireAuth>} />
+          <Route path="/aluno/caixa" element={<RequireAuth role="aluno"><AlunoCaixa /></RequireAuth>} />
+          <Route path="/aluno/perfil" element={<RequireAuth role="aluno"><AlunoPerfil /></RequireAuth>} />
 
-        {/* Aluno */}
-        <Route path="/aluno/dashboard" element={<RequireAuth role="aluno"><AlunoDashboard /></RequireAuth>} />
-        <Route path="/aluno/rifas" element={<RequireAuth role="aluno"><AlunoRifas /></RequireAuth>} />
-        <Route path="/aluno/pagamentos" element={<RequireAuth role="aluno"><AlunoPagamentos /></RequireAuth>} />
-        <Route path="/aluno/caixa" element={<RequireAuth role="aluno"><AlunoCaixa /></RequireAuth>} />
-        <Route path="/aluno/perfil" element={<RequireAuth role="aluno"><AlunoPerfil /></RequireAuth>} />
-
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </>
   );
 }

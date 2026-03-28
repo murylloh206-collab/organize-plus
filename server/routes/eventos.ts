@@ -2,7 +2,7 @@ import { Router } from "express";
 import { requireAuth, requireAdmin } from "../auth.js";
 import { 
   getEventosBySala, 
-  getEventosProximos, // Nova função
+  getEventosProximos,
   createEvento, 
   updateEvento, 
   deleteEvento 
@@ -38,27 +38,23 @@ router.get("/proximos", requireAuth, async (req, res) => {
 // POST /api/eventos - Criar novo evento
 router.post("/", requireAdmin, async (req, res) => {
   try {
-    const { titulo, descricao, data, local, tipo, status } = req.body;
+    const { titulo, descricao, data, tipo, local, status, salaId, foto } = req.body;
     
-    if (!titulo || !data) {
-      return res.status(400).json({ message: "Título e data são obrigatórios" });
-    }
-
-    const eventoData = {
+    const novoEvento = await createEvento({
       titulo,
-      descricao: descricao || null,
+      descricao,
       data: new Date(data),
-      local: local || null,
-      tipo: tipo || "evento",
-      status: status || "planejado",
-      salaId: req.session.salaId!
-    };
-
-    const ev = await createEvento(eventoData);
-    res.status(201).json(ev);
-  } catch (e: any) {
-    console.error("Erro ao criar evento:", e);
-    res.status(400).json({ message: e.message });
+      local,
+      tipo,
+      status,
+      salaId,
+      foto,
+    });
+    
+    res.status(201).json(novoEvento);
+  } catch (error: any) {
+    console.error("Erro ao criar evento:", error);
+    res.status(400).json({ message: error.message });
   }
 });
 
@@ -66,7 +62,7 @@ router.post("/", requireAdmin, async (req, res) => {
 router.put("/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { titulo, descricao, data, local, tipo, status } = req.body;
+    const { titulo, descricao, data, local, tipo, status, foto } = req.body; // ← ADICIONEI FOTO
     
     const eventoData: any = {};
     
@@ -75,11 +71,8 @@ router.put("/:id", requireAdmin, async (req, res) => {
     if (data !== undefined) eventoData.data = new Date(data);
     if (local !== undefined) eventoData.local = local;
     if (tipo !== undefined) eventoData.tipo = tipo;
-    if (status !== undefined) {
-      if (status === "planejado" || status === "realizado" || status === "cancelado") {
-        eventoData.status = status;
-      }
-    }
+    if (status !== undefined) eventoData.status = status;
+    if (foto !== undefined) eventoData.foto = foto; // ← ADICIONEI FOTO
 
     const ev = await updateEvento(id, eventoData);
     res.json(ev);

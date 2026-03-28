@@ -91,9 +91,13 @@ export const pagamentos = pgTable("pagamentos", {
   status: statusPagamentoEnum("status").default("pendente").notNull(),
   dataVencimento: timestamp("data_vencimento"),
   dataPagamento: timestamp("data_pagamento"),
-  formaPagamento: text("forma_pagamento").default("pix"), 
+  formaPagamento: text("forma_pagamento").default("pix"),
   comprovanteUrl: text("comprovante_url"),
-  descricaoPagamento: text("descricao_pagamento"), 
+  descricaoPagamento: text("descricao_pagamento"),
+  statusComprovante: text("status_comprovante").default("nenhum"),
+  motivoRejeicao: text("motivo_rejeicao"),
+  analisadoPor: integer("analisado_por").references(() => usuarios.id),
+  analisadoEm: timestamp("analisado_em"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -109,6 +113,7 @@ export const eventos = pgTable("eventos", {
   tipo: text("tipo").default("evento").notNull(),
   googleEventId: text("google_event_id"),
   status: statusEventoEnum("status").default("planejado").notNull(),
+  foto: text("foto"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -1,46 +1,58 @@
-import express from 'express';
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
+// server/routes/upload.ts
+import { Router } from "express";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import { requireAuth } from "../auth.js";
 
-const router = express.Router();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Configurar storage do multer
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../uploads/eventos');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+const router = Router();
+
+// Configurar storage para upload de fotos de eventos
+const eventStorage = multer.diskStorage({
+  destination: (_req: any, _file: any, cb: any) => {
+    const dir = path.join(__dirname, "../../uploads/eventos/");
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
-    cb(null, uploadDir);
+    cb(null, dir);
   },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+  filename: (_req: any, file: any, cb: any) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `evento-${uniqueSuffix}${ext}`);
   }
 });
 
-const upload = multer({ 
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif|webp/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
-    if (mimetype && extname) {
-      return cb(null, true);
+const upload = multer({
+  storage: eventStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (_req: any, file: any, cb: any) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/jpg", "image/webp"];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Formato não permitido. Use JPG, PNG ou WEBP."));
     }
-    cb(new Error('Apenas imagens são permitidas'));
   }
 });
 
-router.post('/upload', upload.single('foto'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+// POST /api/upload - Upload de foto para evento
+router.post("/", requireAuth, upload.single("foto"), async (req: any, res: any) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "Nenhum arquivo enviado" });
+    }
+
+    const fileUrl = `/uploads/eventos/${req.file.filename}`;
+    res.json({ url: fileUrl, success: true });
+  } catch (error) {
+    console.error("Erro no upload:", error);
+    res.status(500).json({ error: "Erro ao fazer upload" });
   }
-  
-  const fileUrl = `/uploads/eventos/${req.file.filename}`;
-  res.json({ url: fileUrl });
 });
 
 export default router;
