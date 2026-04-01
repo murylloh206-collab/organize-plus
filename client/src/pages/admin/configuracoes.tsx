@@ -17,6 +17,11 @@ interface Sala {
   metaValor: string;
 }
 
+interface AlunoMe {
+  id: number;
+  metaIndividual: string;
+}
+
 export default function AdminConfiguracoes() {
   const qc = useQueryClient();
   const { auth, logout } = useAuth();
@@ -37,6 +42,14 @@ export default function AdminConfiguracoes() {
     queryFn: () => apiRequest("GET", `/salas/${auth?.salaId}`),
     enabled: !!auth?.salaId,
   });
+
+  const { data: alunos = [] } = useQuery<any[]>({
+    queryKey: ["alunos"],
+    queryFn: () => apiRequest("GET", "/alunos"),
+    enabled: !!auth?.salaId,
+  });
+
+  const totalAlunos = alunos.length;
 
   const atualizarSala = useMutation({
     mutationFn: (data: any) => apiRequest("PATCH", `/salas/${auth?.salaId}`, data),
@@ -90,7 +103,7 @@ export default function AdminConfiguracoes() {
     if (!formData.nome && !formData.metaAlunos) return;
     atualizarSala.mutate({ 
       nome: formData.nome || sala?.nome, 
-      metaValor: formData.metaAlunos ? parseFloat(formData.metaAlunos) * 100 : undefined 
+      metaValor: formData.metaAlunos ? parseFloat(formData.metaAlunos) : undefined 
     });
   };
 
@@ -149,14 +162,27 @@ export default function AdminConfiguracoes() {
               value={formData.nome}
               onChange={(e) => setFormData((f) => ({ ...f, nome: e.target.value }))} 
             />
-            <MobileInput 
-              label="Meta Financeira" 
+          <MobileInput 
+              label="Meta Financeira Total" 
               icon="flag" 
               type="number" 
-              placeholder="Valor em reais (ex: 50000)"
+              placeholder={sala?.metaValor ? `Atual: R$ ${parseFloat(sala.metaValor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : "Valor total em reais (ex: 50000)"}
               value={formData.metaAlunos} 
               onChange={(e) => setFormData((f) => ({ ...f, metaAlunos: e.target.value }))} 
             />
+            {formData.metaAlunos && totalAlunos > 0 && (
+              <div className="text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl px-3 py-2 flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm">calculate</span>
+                <span>
+                  = R$ {(parseFloat(formData.metaAlunos) / totalAlunos).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} por aluno ({totalAlunos} alunos)
+                </span>
+              </div>
+            )}
+            {!formData.metaAlunos && sala?.metaValor && totalAlunos > 0 && (
+              <p className="text-xs text-slate-400">
+                Cota atual: R$ {(parseFloat(sala.metaValor) / totalAlunos).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} por aluno
+              </p>
+            )}
             <MobileButton variant="primary" fullWidth loading={atualizarSala.isPending} onClick={handleSaveInfo}>
               Salvar Alterações
             </MobileButton>

@@ -27,7 +27,7 @@ export default function AlunoCaixa() {
 
   return (
     <MobileLayout role="aluno">
-      <MobileHeader title="Caixa Transparente" subtitle="Movimentações da Turma" gradient />
+      <MobileHeader title="Caixa Transparente" subtitle="Movimentações da Turma" gradient showAvatar />
 
       <div className="px-4 py-4 space-y-4">
         {/* Saldo Principal */}

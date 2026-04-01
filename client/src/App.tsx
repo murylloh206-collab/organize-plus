@@ -31,6 +31,8 @@ import AlunoPagamentos from "./pages/aluno/pagamentos";
 import AlunoCaixa from "./pages/aluno/caixa";
 import AlunoPerfil from "./pages/aluno/perfil";
 import AlunoCadastro from "./pages/aluno/cadastro";
+import AlunoEventos from "./pages/aluno/eventos";
+import AlunoRanking from "./pages/aluno/ranking";
 
 function RequireAuth({ children, role }: { children: React.ReactNode; role?: "admin" | "aluno" }) {
   const { auth, isLoading } = useAuth();
@@ -89,6 +91,8 @@ export default function App() {
           <Route path="/aluno/pagamentos" element={<RequireAuth role="aluno"><AlunoPagamentos /></RequireAuth>} />
           <Route path="/aluno/caixa" element={<RequireAuth role="aluno"><AlunoCaixa /></RequireAuth>} />
           <Route path="/aluno/perfil" element={<RequireAuth role="aluno"><AlunoPerfil /></RequireAuth>} />
+          <Route path="/aluno/eventos" element={<RequireAuth role="aluno"><AlunoEventos /></RequireAuth>} />
+          <Route path="/aluno/ranking" element={<RequireAuth role="aluno"><AlunoRanking /></RequireAuth>} />
 
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

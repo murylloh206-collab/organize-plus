@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Animação Organize+ (1080x1920)</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap');
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      display: flex; justify-content: center; align-items: center;
+      height: 100vh; background-color: #111; overflow: hidden;
+      font-family: 'Montserrat', sans-serif;
+    }
+
+    .container {
+      width: 400px; /* Simula 1080px proporção 9:16 */
+      height: 711px; /* Simula 1920px */
+      background: linear-gradient(135deg, #1e3a5f 0%, #0d1e36 100%);
+      position: relative; overflow: hidden;
+      box-shadow: 0 0 30px rgba(0,0,0,0.8);
+      color: white; text-align: center;
+    }
+
+    .scene {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      opacity: 0; pointer-events: none;
+    }
+
+    h1, h2, h3 { margin: 10px 0; text-wrap: balance; }
+    .gold-text { color: #c6a43f; text-shadow: 0 0 20px rgba(198,164,63,0.5); }
+    
+    /* SCENE 1 */
+    #scene1 { animation: fadeScene 5s forwards; }
+    .logo {
+      font-size: 3rem; font-weight: 900;
+      animation: logoGlow 2s infinite alternate, spinIn 1.5s ease-out;
+    }
+    
+    /* SCENE 2 */
+    #scene2 { animation: fadeScene 10s forwards 5s; background: #3a1e1e; }
+    .icons-row { display: flex; gap: 20px; font-size: 3rem; margin-bottom: 20px; animation: shake 0.5s infinite; }
+    
+    /* SCENE 3 */
+    #scene3 { animation: fadeScene 20s forwards 15s; background: linear-gradient(135deg, #1e3a5f, #c6a43f22); }
+    .feature-list { position: relative; width: 80%; height: 300px; margin-top: 30px;}
+    .feature { 
+      position: absolute; width: 100%; font-size: 1.5rem; font-weight: bold;
+      opacity: 0; transform: translateY(20px);
+      display: flex; flex-direction: column; gap: 10px; align-items: center;
+    }
+    .feature span { font-size: 4rem; }
+    .f1 { animation: featureSlide 3s forwards 16s; }
+    .f2 { animation: featureSlide 3s forwards 19s; }
+    .f3 { animation: featureSlide 3s forwards 22s; }
+    .f4 { animation: featureSlide 3s forwards 25s; }
+    .f5 { animation: featureSlide 3s forwards 28s; }
+    .f6 { animation: featureSlide 3s forwards 31s; }
+
+    /* SCENE 4 */
+    #scene4 { animation: fadeScene 15s forwards 35s; }
+    .stats { font-size: 5rem; font-weight: 900; color: #c6a43f; text-shadow: 0 0 30px #c6a43f; }
+    .s1 { animation: statPop 5s forwards 35s; opacity: 0; position: absolute;}
+    .s2 { animation: statPop 5s forwards 40s; opacity: 0; position: absolute;}
+    .s3 { animation: statPop 5s forwards 45s; opacity: 0; position: absolute;}
+
+    /* SCENE 5 */
+    #scene5 { animation: fadeScene 10s forwards 50s; }
+    .btn {
+      background: #c6a43f; color: #1e3a5f; padding: 15px 40px; border-radius: 50px;
+      font-weight: 900; font-size: 1.5rem; text-transform: uppercase; margin-top: 20px;
+      animation: pulse 1s infinite;
+    }
+    .link { margin-top: 15px; font-size: 1.2rem; }
+
+    /* ANIMATIONS */
+    @keyframes fadeScene {
+      0%, 100% { opacity: 0; }
+      10%, 90% { opacity: 1; pointer-events: auto; z-index: 10; }
+    }
+    @keyframes logoGlow {
+      from { text-shadow: 0 0 10px #c6a43f, 0 0 20px #c6a43f; }
+      to { text-shadow: 0 0 20px #c6a43f, 0 0 40px #c6a43f; }
+    }
+    @keyframes spinIn {
+      from { transform: scale(0) rotate(180deg); opacity: 0; }
+      to { transform: scale(1) rotate(0); opacity: 1; }
+    }
+    @keyframes shake {
+      0% { transform: translate(1px, 1px) rotate(0deg); }
+      25% { transform: translate(-1px, -2px) rotate(-1deg); }
+      50% { transform: translate(-3px, 0px) rotate(1deg); }
+      75% { transform: translate(3px, 2px) rotate(0deg); }
+      100% { transform: translate(1px, -1px) rotate(0deg); }
+    }
+    @keyframes featureSlide {
+      0% { opacity: 0; transform: translateY(50px) scale(0.8); }
+      20%, 80% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-50px) scale(1.1); }
+    }
+    @keyframes statPop {
+      0% { opacity: 0; transform: scale(0.1); }
+      20%, 80% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(3); filter: blur(10px); }
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(198,164,63, 0.7); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 20px rgba(198,164,63, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(198,164,63, 0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Instrução: Dê play e grave a tela do container (400x711) -->
+  <div class="container" id="video-container">
+    
+    <!-- Cena 1: 0 a 5s -->
+    <div class="scene" id="scene1">
+      <div class="logo gold-text">ORGANIZE+</div>
+      <h2 style="margin-top: 20px; font-weight: 400; font-size: 1.2rem;">Sua formatura<br>merece organização</h2>
+    </div>
+
+    <!-- Cena 2: 5 a 15s -->
+    <div class="scene" id="scene2">
+      <div class="icons-row">
+        <span>📊</span><span>💸</span><span>😕</span>
+      </div>
+      <h1 style="color: #ff5555;">Cansado de<br>planilhas e confusão?</h1>
+    </div>
+
+    <!-- Cena 3: 15 a 35s -->
+    <div class="scene" id="scene3">
+      <h2 class="gold-text">A SOLUÇÃO É O</h2>
+      <div class="logo">ORGANIZE+</div>
+      <div class="feature-list">
+        <div class="feature f1"><span>😁</span> Gestão de Alunos</div>
+        <div class="feature f2"><span>🎟️</span> Rifas e Sorteios</div>
+        <div class="feature f3"><span>📱</span> Pix Integrado</div>
+        <div class="feature f4"><span>📅</span> Calendário</div>
+        <div class="feature f5"><span>💰</span> Caixa da Turma</div>
+        <div class="feature f6"><span>🏆</span> Ranking Gamificado</div>
+      </div>
+    </div>
+
+    <!-- Cena 4: 35 a 50s -->
+    <div class="scene" id="scene4">
+      <h3 style="font-size: 1.5rem; margin-bottom: 20px;">Você terá...</h3>
+      <div class="stats s1">80%<br><span style="font-size: 1rem; color: white; text-shadow: none;">Menos tempo gasto</span></div>
+      <div class="stats s2">100%<br><span style="font-size: 1rem; color: white; text-shadow: none;">Transparência</span></div>
+      <div class="stats s3">24/7<br><span style="font-size: 1rem; color: white; text-shadow: none;">Disponibilidade</span></div>
+    </div>
+
+    <!-- Cena 5: 50 a 60s -->
+    <div class="scene" id="scene5">
+      <div class="logo gold-text" style="animation: none;">ORGANIZE+</div>
+      <div class="btn">TESTE GRÁTIS</div>
+      <div class="link">organizeplus.com.br</div>
+      <div style="margin-top: 30px; font-size: 2rem;">📸 💬</div>
+    </div>
+
+  </div>
+
+  <script>
+    // Recarrega a animação ao clicar na tela
+    document.body.addEventListener('click', () => {
+      window.location.reload();
+    });
+  </script>
+</body>
+</html>

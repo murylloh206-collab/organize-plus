@@ -9,8 +9,9 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      retry: 1,
+      retry: false,
       refetchOnWindowFocus: false,
+      refetchInterval: false,
     },
   },
 });

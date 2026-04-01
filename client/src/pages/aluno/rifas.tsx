@@ -1,15 +1,25 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import MobileLayout from "../../components/layout/MobileLayout";
 import MobileHeader from "../../components/layout/MobileHeader";
 import MobileCard from "../../components/ui/MobileCard";
 import MobileButton from "../../components/ui/MobileButton";
-import MobileInput from "../../components/ui/MobileInput";
-import BottomSheet from "../../components/ui/BottomSheet";
-import { useBottomSheet } from "../../hooks/useBottomSheet";
+import Skeleton from "../../components/ui/Skeleton";
 import { apiRequest } from "../../lib/queryClient";
 import { useAuth } from "../../hooks/useAuth";
 import { formatCurrency } from "../../components/shared/CurrencyFormat";
+import { formatDate } from "../../components/shared/DateFormat";
+
+interface Ticket {
+  id: number;
+  rifaId: number;
+  numero: number;
+  compradorNome: string;
+  compradorContato: string | null;
+  status: string;
+  valor: string;
+  createdAt: string;
+}
 
 interface Rifa {
   id: number;
@@ -19,89 +29,181 @@ interface Rifa {
   status: string;
 }
 
-interface Ticket {
-  id: number;
-  rifaId: number;
-  compradorNome: string;
-  compradorContato: string | null;
-  valido: boolean;
-  status: string;
-  valor: string;
+const FRASES_MOTIVACIONAIS = [
+  "Cada rifa vendida é um passo mais perto do seu sonho!",
+  "Você está arrasando nas vendas! Continue assim!",
+  "Que orgulho! Sua dedicação está fazendo a diferença!",
+  "O sucesso é a soma de pequenos esforços repetidos!",
+  "Você é incrível! Cada venda conta muito!",
+  "Continue firme! A formatura está cada vez mais perto!",
+  "Sua determinação inspira toda a turma!",
+  "Vender rifas nunca foi tão motivador com você!",
+  "Cada número vendido é uma semente de conquista!",
+  "Você está escrevendo uma história de sucesso!",
+];
+
+function getFraseMotivacional(): string {
+  const index = Math.floor(Math.random() * FRASES_MOTIVACIONAIS.length);
+  return FRASES_MOTIVACIONAIS[index];
+}
+
+function compartilharWhatsApp(ticket: Ticket, rifaNome: string): string {
+  const mensagem = `Comprei uma rifa para nossa formatura!\n\nNúmero: #${String(ticket.numero).padStart(3, "0")}\nComprador: ${ticket.compradorNome}\nValor: ${formatCurrency(parseFloat(ticket.valor))}\n\nAjuda a gente a realizar esse sonho!`;
+  return `https://api.whatsapp.com/send?text=${encodeURIComponent(mensagem)}`;
 }
 
 export default function AlunoRifas() {
   const { auth } = useAuth();
-  const qc = useQueryClient();
-  const vendaSheet = useBottomSheet();
+  const [frase] = useState(getFraseMotivacional);
 
-  const [selectedRifa, setSelectedRifa] = useState<Rifa | null>(null);
-  const [compradorNome, setCompradorNome] = useState("");
-  const [compradorContato, setCompradorContato] = useState("");
-
-  const { data: rifas = [], isLoading: isLoadingRifas } = useQuery<Rifa[]>({
-    queryKey: ["rifas"],
-    queryFn: () => apiRequest("GET", "/rifas"),
-    enabled: !!auth,
-  });
-
-  const { data: meusTickets = [] } = useQuery<Ticket[]>({
+  // Rifas do próprio aluno
+  const { data: meusTickets = [], isLoading: isLoadingTickets, refetch } = useQuery<Ticket[]>({
     queryKey: ["meus-tickets"],
     queryFn: () => apiRequest("GET", "/rifas/meus-tickets"),
     enabled: !!auth,
   });
 
-  const vender = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", `/rifas/${selectedRifa?.id}/tickets`, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["meus-tickets"] });
-      vendaSheet.close();
-      setSelectedRifa(null); setCompradorNome(""); setCompradorContato("");
-    },
+  // Rifas disponíveis para buscar nome/prêmio
+  const { data: rifas = [] } = useQuery<Rifa[]>({
+    queryKey: ["rifas"],
+    queryFn: () => apiRequest("GET", "/rifas"),
+    enabled: !!auth,
   });
 
-  const rifasAtivas = rifas.filter((r) => r.status === "ativa");
+  // Estatísticas do aluno (todas as rifas, não apenas pagas)
+  const totalVendidas = meusTickets.length;
+  const totalArrecadado = meusTickets.reduce(
+    (s, t) => s + parseFloat(t.valor || "0"),
+    0
+  );
+
+  // Tickets com info da rifa
+  const ticketsComRifa = useMemo(() => {
+    return meusTickets.map((t) => ({
+      ...t,
+      rifa: rifas.find((r) => r.id === t.rifaId),
+    }));
+  }, [meusTickets, rifas]);
 
   return (
     <MobileLayout role="aluno">
-      <MobileHeader title="Minhas Rifas" subtitle="Venda e acompanhe resultados" gradient />
+      <MobileHeader title="Minhas Rifas" subtitle="Acompanhe suas vendas" gradient showAvatar />
 
       <div className="px-4 py-4 space-y-6">
-        {/* Rifas Ativas */}
+        {/* Frase motivacional */}
+        <MobileCard className="p-4 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 border-indigo-100 dark:border-indigo-900/50">
+          <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300 text-center italic">
+            &ldquo;{frase}&rdquo;
+          </p>
+        </MobileCard>
+
+        {/* Cards de estatísticas */}
+        {isLoadingTickets ? (
+          <div className="grid grid-cols-2 gap-2">
+            {[1, 2].map((i) => (
+              <Skeleton key={i} variant="metric" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <MobileCard className="p-3 text-center">
+              <span className="material-symbols-outlined text-indigo-500 text-xl block mb-1">
+                confirmation_number
+              </span>
+              <p className="text-xl font-black text-slate-900 dark:text-white">{totalVendidas}</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Vendidas</p>
+            </MobileCard>
+            <MobileCard className="p-3 text-center">
+              <span className="material-symbols-outlined text-emerald-500 text-xl block mb-1">
+                payments
+              </span>
+              <p className="text-lg font-black text-slate-900 dark:text-white leading-tight">
+                {formatCurrency(totalArrecadado)}
+              </p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Arrecadado</p>
+            </MobileCard>
+          </div>
+        )}
+
+        {/* Lista de rifas vendidas */}
         <section>
-          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 px-1">Rifas Disponíveis</h3>
-          {isLoadingRifas ? (
+          <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 px-1">
+            Suas Vendas ({ticketsComRifa.length})
+          </h3>
+          {isLoadingTickets ? (
             <div className="space-y-3">
-              {[1, 2].map((i) => (
-                <div key={i} className="h-32 bg-slate-100 dark:bg-slate-800 rounded-2xl animate-pulse" />
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} variant="card" />
               ))}
             </div>
-          ) : rifasAtivas.length === 0 ? (
+          ) : ticketsComRifa.length === 0 ? (
             <MobileCard className="text-center py-8 bg-slate-50 dark:bg-slate-800/50">
-              <span className="material-symbols-outlined text-4xl text-slate-300 dark:text-slate-600 mb-2 block">confirmation_number</span>
-              <p className="text-sm text-slate-500">Nenhuma rifa ativa no momento.</p>
+              <span className="material-symbols-outlined text-4xl text-slate-300 dark:text-slate-600 mb-2 block">
+                confirmation_number
+              </span>
+              <p className="text-sm text-slate-500">Você ainda não tem rifas vendidas.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                As rifas cadastradas pelo admin aparecerão aqui.
+              </p>
             </MobileCard>
           ) : (
-            <div className="grid gap-3 grid-cols-1">
-              {rifasAtivas.map((rifa) => (
-                <MobileCard key={rifa.id} className="p-4 border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/30 dark:bg-indigo-950/20">
-                  <div className="flex gap-4">
-                    <div className="size-14 rounded-2xl bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 shadow-inner">
-                      <span className="material-symbols-outlined text-2xl">confirmation_number</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-slate-900 dark:text-white truncate">{rifa.nome}</h4>
-                      <p className="text-xs text-slate-500 mt-0.5 truncate flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[10px]">emoji_events</span> {rifa.premio}
-                      </p>
-                      <div className="mt-3 flex items-center justify-between">
-                        <span className="text-xl font-black text-indigo-600 dark:text-indigo-400">
-                          {formatCurrency(parseFloat(rifa.preco))}
+            <div className="space-y-3">
+              {ticketsComRifa.map((t) => (
+                <MobileCard key={t.id} className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-black text-indigo-600 dark:text-indigo-400">
+                          #{String(t.numero).padStart(3, "0")}
                         </span>
-                        <MobileButton size="sm" icon="add_shopping_cart" onClick={() => { setSelectedRifa(rifa); vendaSheet.open(); }}>
-                          Vender
-                        </MobileButton>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${
+                            t.status === "pago"
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                              : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                          }`}
+                        >
+                          {t.status}
+                        </span>
                       </div>
+                      <p className="text-sm font-bold text-slate-900 dark:text-white mt-1">
+                        {t.compradorNome}
+                      </p>
+                      {t.compradorContato && (
+                        <p className="text-xs text-slate-500">{t.compradorContato}</p>
+                      )}
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {formatDate(t.createdAt, "short")} · {t.rifa?.nome ?? "Rifa"}
+                      </p>
                     </div>
+                    <p className="text-base font-black text-slate-900 dark:text-white">
+                      {formatCurrency(parseFloat(t.valor))}
+                    </p>
+                  </div>
+
+                  {/* Ações */}
+                  <div className="flex gap-2 mt-2">
+                    <a
+                      href={compartilharWhatsApp(t, t.rifa?.nome ?? "Rifa")}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-1"
+                    >
+                      <MobileButton variant="primary" fullWidth size="sm" icon="share">
+                        WhatsApp
+                      </MobileButton>
+                    </a>
+                    <MobileButton
+                      variant="secondary"
+                      size="sm"
+                      icon="content_copy"
+                      onClick={() => {
+                        const texto = `Rifa #${String(t.numero).padStart(3, "0")} - ${t.compradorNome} - ${formatCurrency(parseFloat(t.valor))} - ${t.status}`;
+                        navigator.clipboard.writeText(texto);
+                      }}
+                    >
+                      Copiar
+                    </MobileButton>
                   </div>
                 </MobileCard>
               ))}
@@ -109,55 +211,14 @@ export default function AlunoRifas() {
           )}
         </section>
 
-        {/* Histórico de Vendas */}
-        {meusTickets.length > 0 && (
-          <section>
-            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 px-1">Histórico de Vendas</h3>
-            <div className="space-y-3">
-              {meusTickets.map((t) => (
-                <div key={t.id} className="mobile-list-item">
-                  <div className="size-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-slate-500 text-[20px]">receipt</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">Ticket #{String(t.id).padStart(4, '0')}</p>
-                    <p className="text-[10px] text-slate-500 truncate uppercase tracking-widest mt-0.5">{t.compradorNome}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="text-sm font-black text-slate-900 dark:text-white">{formatCurrency(parseFloat(t.valor))}</p>
-                    <span className={`inline-block mt-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${t.status === "pago" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
-                      {t.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        {/* Botão para atualizar */}
+        <button
+          onClick={() => refetch()}
+          className="w-full py-2 text-center text-sm text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+        >
+          ↻ Atualizar lista
+        </button>
       </div>
-
-      <BottomSheet isOpen={vendaSheet.isOpen} onClose={() => { vendaSheet.close(); setSelectedRifa(null); }} title="Registrar Venda">
-        {selectedRifa && (
-          <div className="space-y-5">
-            <div className="bg-indigo-50 dark:bg-indigo-950/30 p-4 rounded-xl text-center border border-indigo-100 dark:border-indigo-900/50">
-              <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1">{selectedRifa.nome}</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white">{formatCurrency(parseFloat(selectedRifa.preco))}</p>
-            </div>
-
-            <div className="space-y-3">
-              <MobileInput label="Nome do Comprador" icon="person" placeholder="Nome completo" value={compradorNome} onChange={(e) => setCompradorNome(e.target.value)} />
-              <MobileInput label="Contato (opcional)" icon="call" placeholder="Telefone ou e-mail" value={compradorContato} onChange={(e) => setCompradorContato(e.target.value)} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
-              <MobileButton variant="secondary" fullWidth onClick={() => { vendaSheet.close(); setSelectedRifa(null); }}>Cancelar</MobileButton>
-              <MobileButton variant="primary" fullWidth loading={vender.isPending} disabled={!compradorNome} onClick={() => vender.mutate({ compradorNome, compradorContato, valor: selectedRifa.preco })}>
-                Confirmar Venda
-              </MobileButton>
-            </div>
-          </div>
-        )}
-      </BottomSheet>
     </MobileLayout>
   );
 }

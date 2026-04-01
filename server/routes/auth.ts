@@ -4,7 +4,7 @@ import {
   getUserByEmail, createUser, getSalaById, createSala,
   getChaveByCode, marcarChaveUsada,
 } from "../storage.js";
-import { verificarSenha, validarChave, carregarUsuarioSessao } from "../auth.js"; // <-- ADICIONAR AQUI
+import { verificarSenha, validarChave, carregarUsuarioSessao } from "../auth.js";
 
 const router = Router();
 
@@ -12,13 +12,8 @@ const router = Router();
 router.get("/me", async (req, res) => {
   if (!req.session?.userId) return res.status(401).json({ message: "Não autenticado" });
   
-  // Buscar dados completos do usuário
-  const user = await getUserByEmail("").catch(() => null);
-  
-  // Tentar carregar dados atualizados na sessão
-  if (req.session.userId) {
-    await carregarUsuarioSessao(req, req.session.userId);
-  }
+  // Recarregar dados atualizados na sessão
+  await carregarUsuarioSessao(req, req.session.userId);
   
   res.json({ 
     userId: req.session.userId, 

@@ -1,10 +1,10 @@
 import { db } from "./db.js";
 import {
   usuarios, salas, chaves, rifas, ticketsRifa,
-  pagamentos, eventos, metas, caixa,
+  pagamentos, eventos, metas, caixa, notificacoes,
   type InsertUsuario
 } from "../shared/schema.js";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, or } from "drizzle-orm";
 import { hashSenha } from "./auth.js";
 import { contribuicoesMeta, historicoMeta } from "../shared/schema.js";
 
@@ -114,6 +114,86 @@ export async function createSala(data: { nome: string; codigo: string; dataForma
     senha: data.senha ?? null,
   }).returning();
   return sala;
+}
+
+export async function recalcularCotasPorSala(salaId: number) {
+  const sala = await getSalaById(salaId);
+  if (!sala) return;
+
+  const metaValor = parseFloat(sala.metaValor ?? "0");
+
+  const alunos = await db
+    .select({ id: usuarios.id })
+    .from(usuarios)
+    .where(and(eq(usuarios.salaId, salaId), eq(usuarios.role, "aluno")));
+
+  if (alunos.length === 0) return;
+
+  const cotaPorAluno = (metaValor / alunos.length).toFixed(2);
+
+  await db
+    .update(usuarios)
+    .set({ metaIndividual: cotaPorAluno })
+    .where(and(eq(usuarios.salaId, salaId), eq(usuarios.role, "aluno")));
+
+  // Criar notificação para todos os alunos sobre a mudança de cota
+  await criarNotificacaoCotaRecalculada(salaId, cotaPorAluno);
+}
+
+export async function updateSala(id: number, data: Partial<{ nome: string; metaValor: number; senha: string }>) {
+  const updateData: any = {};
+  if (data.nome !== undefined) updateData.nome = data.nome;
+  if (data.metaValor !== undefined) updateData.metaValor = data.metaValor.toString();
+  if (data.senha !== undefined) updateData.senha = data.senha;
+
+  const [sala] = await db.update(salas).set(updateData).where(eq(salas.id, id)).returning();
+
+  if (data.metaValor !== undefined) {
+    await recalcularCotasPorSala(id);
+  }
+
+  return sala;
+}
+
+export async function deleteSala(id: number) {
+  await db.transaction(async (tx) => {
+    // Alunos da sala
+    const alunosDaSala = await tx
+      .select({ id: usuarios.id })
+      .from(usuarios)
+      .where(and(eq(usuarios.salaId, id), eq(usuarios.role, "aluno")));
+
+    for (const aluno of alunosDaSala) {
+      await tx.delete(ticketsRifa).where(eq(ticketsRifa.vendedorId, aluno.id));
+      await tx.delete(pagamentos).where(eq(pagamentos.usuarioId, aluno.id));
+    }
+
+    // Rifas da sala
+    const rifasDaSala = await tx.select({ id: rifas.id }).from(rifas).where(eq(rifas.salaId, id));
+    for (const rifa of rifasDaSala) {
+      await tx.delete(ticketsRifa).where(eq(ticketsRifa.rifaId, rifa.id));
+    }
+    await tx.delete(rifas).where(eq(rifas.salaId, id));
+
+    // Demais tabelas da sala
+    await tx.delete(pagamentos).where(eq(pagamentos.salaId, id));
+    await tx.delete(eventos).where(eq(eventos.salaId, id));
+    await tx.delete(caixa).where(eq(caixa.salaId, id));
+
+    // Metas
+    const metasDaSala = await tx.select({ id: metas.id }).from(metas).where(eq(metas.salaId, id));
+    for (const meta of metasDaSala) {
+      await tx.delete(contribuicoesMeta).where(eq(contribuicoesMeta.metaId, meta.id));
+      await tx.delete(historicoMeta).where(eq(historicoMeta.metaId, meta.id));
+    }
+    await tx.delete(metas).where(eq(metas.salaId, id));
+
+    // Alunos
+    await tx.delete(usuarios).where(and(eq(usuarios.salaId, id), eq(usuarios.role, "aluno")));
+
+    // Sala
+    await tx.delete(salas).where(eq(salas.id, id));
+  });
 }
 
 // ---------- CHAVES ----------
@@ -1092,4 +1172,186 @@ export async function getPagamentosComComprovantePendente(salaId: number) {
       eq(pagamentos.statusComprovante, "pendente")
     ))
     .orderBy(pagamentos.createdAt);
+}
+
+// ---------- NOTIFICAÇÕES ----------
+export async function getNotificacoesByAluno(alunoId: number, limit: number = 20) {
+  return db.select()
+    .from(notificacoes)
+    .where(eq(notificacoes.alunoId, alunoId))
+    .orderBy(desc(notificacoes.createdAt))
+    .limit(limit);
+}
+
+export async function getNotificacaoCountNaoLidas(alunoId: number) {
+  const [result] = await db
+    .select({ count: sql<string>`COUNT(*)`.as("count") })
+    .from(notificacoes)
+    .where(and(
+      eq(notificacoes.alunoId, alunoId),
+      eq(notificacoes.lida, false)
+    ));
+  return parseInt(result?.count ?? "0");
+}
+
+export async function createNotificacao(data: {
+  alunoId: number;
+  titulo: string;
+  mensagem: string;
+  tipo?: "pagamento" | "rifa" | "sistema";
+}) {
+  const [notificacao] = await db.insert(notificacoes).values({
+    alunoId: data.alunoId,
+    titulo: data.titulo,
+    mensagem: data.mensagem,
+    tipo: data.tipo || "sistema",
+    lida: false,
+    createdAt: new Date(),
+  }).returning();
+  return notificacao;
+}
+
+export async function marcarNotificacaoComoLida(id: number) {
+  const [notificacao] = await db
+    .update(notificacoes)
+    .set({ lida: true })
+    .where(eq(notificacoes.id, id))
+    .returning();
+  return notificacao;
+}
+
+export async function marcarTodasNotificacoesComoLidas(alunoId: number) {
+  await db
+    .update(notificacoes)
+    .set({ lida: true })
+    .where(and(
+      eq(notificacoes.alunoId, alunoId),
+      eq(notificacoes.lida, false)
+    ));
+}
+
+export async function criarNotificacaoCotaRecalculada(salaId: number, novaCota: string) {
+  const alunosDaSala = await db
+    .select({ id: usuarios.id })
+    .from(usuarios)
+    .where(and(eq(usuarios.salaId, salaId), eq(usuarios.role, "aluno")));
+
+  const valorFormatado = parseFloat(novaCota).toLocaleString("pt-BR", {
+    style: "currency", currency: "BRL"
+  });
+
+  for (const aluno of alunosDaSala) {
+    await createNotificacao({
+      alunoId: aluno.id,
+      titulo: "Cota Recalculada",
+      mensagem: `Sua cota individual foi atualizada para ${valorFormatado} devido a uma mudança na turma.`,
+      tipo: "sistema",
+    });
+  }
+}
+
+// ---------- DASHBOARD DO ALUNO ----------
+export async function getAlunoDashboardStats(alunoId: number, salaId: number) {
+  // Meta individual do aluno
+  const [aluno] = await db
+    .select({
+      metaIndividual: usuarios.metaIndividual,
+      valorArrecadadoRifas: usuarios.valorArrecadadoRifas,
+      nome: usuarios.nome,
+      avatarUrl: usuarios.avatarUrl,
+    })
+    .from(usuarios)
+    .where(eq(usuarios.id, alunoId))
+    .limit(1);
+
+  const metaIndividual = parseFloat(aluno?.metaIndividual ?? "0");
+
+  // Valor pago pelo aluno (pagamentos)
+  const [pagResult] = await db
+    .select({
+      totalPago: sql<string>`COALESCE(SUM(CASE WHEN LOWER(${pagamentos.status}::text) = 'pago' THEN ${pagamentos.valor}::numeric ELSE 0 END), 0)`.as("totalPago"),
+      totalPendente: sql<string>`COALESCE(SUM(CASE WHEN LOWER(${pagamentos.status}::text) = 'pendente' THEN ${pagamentos.valor}::numeric ELSE 0 END), 0)`.as("totalPendente"),
+      totalGeral: sql<string>`COALESCE(SUM(${pagamentos.valor}::numeric), 0)`.as("totalGeral"),
+    })
+    .from(pagamentos)
+    .where(eq(pagamentos.usuarioId, alunoId));
+
+  const totalPago = parseFloat(pagResult?.totalPago ?? "0");
+  const totalPendente = parseFloat(pagResult?.totalPendente ?? "0");
+
+  // Tickets de rifa do aluno
+  const [rifaResult] = await db
+    .select({
+      totalVendido: sql<string>`COALESCE(SUM(CASE WHEN LOWER(${ticketsRifa.status}::text) = 'pago' THEN ${ticketsRifa.valor}::numeric ELSE 0 END), 0)`.as("totalVendido"),
+      totalTickets: sql<string>`COUNT(*)`.as("totalTickets"),
+    })
+    .from(ticketsRifa)
+    .where(eq(ticketsRifa.vendedorId, alunoId));
+
+  const totalRifasVendidas = parseFloat(rifaResult?.totalVendido ?? "0");
+  const totalTickets = parseInt(rifaResult?.totalTickets ?? "0");
+
+  // Saldo do caixa da sala
+  const saldoCaixa = await getSaldoCaixa(salaId);
+
+  // Meta total da sala
+  const [salaInfo] = await db
+    .select({ metaValor: salas.metaValor })
+    .from(salas)
+    .where(eq(salas.id, salaId))
+    .limit(1);
+
+  const metaSala = parseFloat(salaInfo?.metaValor ?? "0");
+
+  // Total arrecadado pela sala (pagamentos pagos + rifas pagas)
+  const [salaPag] = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(CASE WHEN LOWER(${pagamentos.status}::text) = 'pago' THEN ${pagamentos.valor}::numeric ELSE 0 END), 0)`.as("total"),
+    })
+    .from(pagamentos)
+    .where(eq(pagamentos.salaId, salaId));
+
+  const [salaRifas] = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(${ticketsRifa.valor}::numeric), 0)`.as("total"),
+    })
+    .from(ticketsRifa)
+    .innerJoin(rifas, eq(ticketsRifa.rifaId, rifas.id))
+    .where(and(
+      eq(rifas.salaId, salaId),
+      sql`LOWER(${ticketsRifa.status}::text) = 'pago'`
+    ));
+
+  const totalArrecadadoSala = parseFloat(salaPag?.total ?? "0") + parseFloat(salaRifas?.total ?? "0");
+
+  // Contar alunos na sala
+  const [alunosCount] = await db
+    .select({ count: sql<string>`COUNT(*)`.as("count") })
+    .from(usuarios)
+    .where(and(eq(usuarios.salaId, salaId), eq(usuarios.role, "aluno")));
+
+  return {
+    aluno: {
+      nome: aluno?.nome ?? "",
+      avatarUrl: aluno?.avatarUrl,
+      metaIndividual,
+    },
+    pagamentos: {
+      totalPago,
+      totalPendente,
+      percentualPago: metaIndividual > 0 ? Math.round((totalPago / metaIndividual) * 100) : 0,
+    },
+    rifas: {
+      totalVendido: totalRifasVendidas,
+      totalTickets,
+      metaRifas: metaIndividual * 0.1, // 10% da cota individual
+    },
+    sala: {
+      metaTotal: metaSala,
+      totalArrecadado: totalArrecadadoSala,
+      saldoCaixa,
+      totalAlunos: parseInt(alunosCount?.count ?? "0"),
+      percentualMeta: metaSala > 0 ? Math.round((totalArrecadadoSala / metaSala) * 100) : 0,
+    },
+  };
 }

@@ -6,7 +6,9 @@ import {
   createUser,
   updateUser,
   deleteUser,
-  getDashboardStats 
+  getDashboardStats,
+  recalcularCotasPorSala,
+  getAlunoDashboardStats,
 } from "../storage.js";
 import multer from "multer";
 import path from "path";
@@ -105,6 +107,35 @@ router.get("/me", requireAuth, async (req: any, res: any) => {
   }
 });
 
+// GET /api/alunos/me/dashboard - Dashboard completo do aluno
+router.get("/me/dashboard", requireAuth, async (req: any, res: any) => {
+  try {
+    const alunoId = req.session.userId!;
+    const salaId = req.session.salaId;
+    
+    if (!salaId) {
+      console.log("[alunos/me/dashboard] salaId não encontrado, retornando dados padrão");
+      return res.status(200).json({
+        aluno: { nome: "", avatarUrl: null, metaIndividual: 0 },
+        pagamentos: { totalPago: 0, totalPendente: 0, percentualPago: 0 },
+        rifas: { totalVendido: 0, totalTickets: 0, metaRifas: 0 },
+        sala: { metaTotal: 0, totalArrecadado: 0, saldoCaixa: 0, totalAlunos: 0, percentualMeta: 0 },
+      });
+    }
+
+    const stats = await getAlunoDashboardStats(alunoId, salaId);
+    return res.status(200).json(stats);
+  } catch (error) {
+    console.error("Erro ao buscar dashboard do aluno:", error);
+    return res.status(200).json({
+      aluno: { nome: "", avatarUrl: null, metaIndividual: 0 },
+      pagamentos: { totalPago: 0, totalPendente: 0, percentualPago: 0 },
+      rifas: { totalVendido: 0, totalTickets: 0, metaRifas: 0 },
+      sala: { metaTotal: 0, totalArrecadado: 0, saldoCaixa: 0, totalAlunos: 0, percentualMeta: 0 },
+    });
+  }
+});
+
 // GET /api/alunos/:id - Buscar aluno por ID
 router.get("/:id", requireAdmin, async (req: any, res: any) => {
   try {
@@ -162,6 +193,9 @@ router.post("/", requireAdmin, async (req: any, res: any) => {
       role: "aluno", 
       salaId: req.session.salaId! 
     });
+
+    // Recalcular cotas individuais após adicionar aluno
+    await recalcularCotasPorSala(req.session.salaId!);
     
     const { senhaHash, ...safe } = aluno as any;
     res.status(201).json(safe);
@@ -210,7 +244,10 @@ router.delete("/:id", requireAdmin, async (req: any, res: any) => {
       return res.status(403).json({ message: "Acesso negado" });
     }
     
+    const salaId = alunoExistente.salaId!;
     await deleteUser(id);
+    // Recalcular cotas individuais após remover aluno
+    await recalcularCotasPorSala(salaId);
     res.status(204).send();
   } catch (error) {
     console.error("Erro ao deletar aluno:", error);

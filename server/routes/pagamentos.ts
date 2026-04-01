@@ -14,8 +14,13 @@ import {
   confirmarPagamentoViaComprovante,
   aprovarComprovante,
   rejeitarComprovante,
-  getPagamentosComComprovantePendente
+  getPagamentosComComprovantePendente,
+  createNotificacao,
 } from "../storage.js";
+
+function formatarMoeda(valor: number): string {
+  return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
 
 const router = Router();
 
@@ -119,6 +124,14 @@ router.post("/", requireAdmin, async (req, res) => {
       status: "pendente"
     });
 
+    // Criar notificação para o aluno
+    await createNotificacao({
+      alunoId: parseInt(usuarioId),
+      titulo: "Novo pagamento registrado",
+      mensagem: `Um novo boleto de ${formatarMoeda(parseFloat(valor))} foi criado: ${descricao}. Vencimento: ${new Date(dataVencimento).toLocaleDateString("pt-BR")}.`,
+      tipo: "pagamento",
+    });
+
     res.status(201).json(pagamento);
   } catch (e: any) {
     console.error("Erro ao criar pagamento:", e);
@@ -177,6 +190,22 @@ router.patch("/:id", requireAdmin, async (req, res) => {
       dataPagamento: dataPagamento ? new Date(dataPagamento) : new Date(),
       formaPagamento
     });
+    
+    // Criar notificação sobre mudança de status
+    if (pagamento) {
+      const statusMsg = status === "pago" 
+        ? `Seu pagamento de ${formatarMoeda(parseFloat(pagamento.valor))} (${pagamento.descricao}) foi confirmado!`
+        : status === "atrasado"
+        ? `Seu pagamento de ${formatarMoeda(parseFloat(pagamento.valor))} (${pagamento.descricao}) está atrasado.`
+        : `Status do pagamento (${pagamento.descricao}) atualizado para: ${status}`;
+      
+      await createNotificacao({
+        alunoId: pagamento.usuarioId,
+        titulo: status === "pago" ? "Pagamento confirmado" : "Status de pagamento alterado",
+        mensagem: statusMsg,
+        tipo: "pagamento",
+      });
+    }
     
     res.json(pagamento);
   } catch (e: any) {

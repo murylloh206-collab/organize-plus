@@ -20,6 +20,7 @@ import googleCalendarRoutes from "./routes/googleCalendar.js";
 import "express-session";
 import uploadRoutes from "./routes/upload.js";
 import rankingRoutes from "./routes/ranking.js";
+import notificacoesRoutes from "./routes/notificacoes.js";
 
 config();
 
@@ -73,6 +74,7 @@ app.use("/api/dashboard", dashboardRouter);
 app.use("/api/google-calendar", googleCalendarRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/ranking", rankingRoutes);
+app.use("/api/notificacoes", notificacoesRoutes);
 
 
 

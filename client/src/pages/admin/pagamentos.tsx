@@ -24,21 +24,28 @@ interface Pagamento {
   dataVencimento: string;
   dataPagamento?: string;
   formaPagamento?: string;
+  comprovanteUrl?: string;
+  statusComprovante?: string;
+  motivoRejeicao?: string;
 }
 
-interface Aluno { id: number; nome: string; email: string; }
+interface Aluno { id: number; nome: string; email: string; avatarUrl?: string; }
 
 type FiltroStatus = "todos" | "pago" | "pendente" | "atrasado";
+type TabPrincipal = "pagamentos" | "comprovantes";
 
 export default function AdminPagamentos() {
   const qc = useQueryClient();
   const formSheet = useBottomSheet();
   const reciboSheet = useBottomSheet();
+  const analiseSheet = useBottomSheet();
 
+  const [tabPrincipal, setTabPrincipal] = useState<TabPrincipal>("pagamentos");
   const [pagSelecionado, setPagSelecionado] = useState<any>(null);
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todos");
   const [filtroNome, setFiltroNome] = useState("");
   const [error, setError] = useState("");
+  const [motivoRejeicao, setMotivoRejeicao] = useState("");
 
   // Form state
   const [descricao, setDescricao] = useState("");
@@ -61,6 +68,16 @@ export default function AdminPagamentos() {
     queryKey: ["alunos"],
     queryFn: () => apiRequest("GET", "/alunos"),
   });
+
+  const { data: comprovantesRaw = [], refetch: refetchComp } = useQuery({
+    queryKey: ["comprovantes-pendentes"],
+    queryFn: () => apiRequest("GET", "/pagamentos/comprovantes-pendentes"),
+  });
+
+  const comprovantes: (Pagamento & { aluno?: Aluno })[] = comprovantesRaw.map((item: any) => ({
+    ...item.pagamento,
+    aluno: item.usuario,
+  }));
 
   const criar = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/pagamentos", data),
@@ -88,6 +105,30 @@ export default function AdminPagamentos() {
       reciboSheet.close();
       setPagSelecionado(null);
       refetch();
+    },
+  });
+
+  const aprovar = useMutation({
+    mutationFn: (id: number) => apiRequest("POST", `/pagamentos/${id}/aprovar`, {}),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pagamentos"] });
+      qc.invalidateQueries({ queryKey: ["comprovantes-pendentes"] });
+      analiseSheet.close();
+      setPagSelecionado(null);
+      refetchComp();
+    },
+  });
+
+  const rejeitar = useMutation({
+    mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
+      apiRequest("POST", `/pagamentos/${id}/rejeitar`, { motivo }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pagamentos"] });
+      qc.invalidateQueries({ queryKey: ["comprovantes-pendentes"] });
+      analiseSheet.close();
+      setPagSelecionado(null);
+      setMotivoRejeicao("");
+      refetchComp();
     },
   });
 
@@ -143,81 +184,198 @@ export default function AdminPagamentos() {
           <MobileMetricCard title="Total"      value={String(pagamentos.length)} icon="receipt_long" color="primary" subtitle="registros" />
         </div>
 
-        {/* Filter */}
-        <MobileInput icon="search" placeholder="Buscar por aluno..." value={filtroNome} onChange={(e) => setFiltroNome(e.target.value)} />
-
-        <div className="mobile-tab-bar">
-          {statusTabs.map((t) => (
-            <button key={t.key} className={`mobile-tab-item ${filtroStatus === t.key ? "active" : ""}`} onClick={() => setFiltroStatus(t.key)}>
-              {t.label}
-            </button>
-          ))}
+        {/* Seletor de aba principal */}
+        <div className="flex bg-slate-100 dark:bg-slate-800 rounded-2xl p-1 gap-1">
+          <button
+            onClick={() => setTabPrincipal("pagamentos")}
+            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all ${tabPrincipal === "pagamentos" ? "bg-white dark:bg-slate-700 text-primary shadow-sm" : "text-slate-500"}`}
+          >
+            Pagamentos
+          </button>
+          <button
+            onClick={() => setTabPrincipal("comprovantes")}
+            className={`flex-1 py-2 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${tabPrincipal === "comprovantes" ? "bg-white dark:bg-slate-700 text-primary shadow-sm" : "text-slate-500"}`}
+          >
+            Comprovantes
+            {comprovantes.length > 0 && (
+              <span className="inline-flex items-center justify-center h-4 min-w-[1rem] px-1 rounded-full bg-rose-500 text-white text-[9px] font-black">
+                {comprovantes.length}
+              </span>
+            )}
+          </button>
         </div>
 
-        {/* List */}
-        {isLoading ? (
-          <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} variant="card" />)}</div>
-        ) : filtrados.length > 0 ? (
-          <div className="space-y-2">
-            {filtrados.map((pag) => {
-              const aluno = alunos.find((a: Aluno) => a.id === pag.usuarioId);
-              const hoje = new Date();
-              const venc = pag.dataVencimento ? new Date(pag.dataVencimento) : null;
-              const isAtrasado = pag.status !== "pago" && venc && venc < hoje;
-              const statusBadge = isAtrasado ? "atrasado" : pag.status as any;
-
-              return (
-                <MobileCard key={pag.id} className="p-4">
+        {tabPrincipal === "comprovantes" ? (
+          /* Aba Comprovantes */
+          comprovantes.length === 0 ? (
+            <MobileCard className="text-center py-12">
+              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-5xl">task_alt</span>
+              <p className="text-slate-500 mt-3 text-sm">Nenhum comprovante pendente</p>
+              <p className="text-xs text-slate-400 mt-1">Todos os comprovantes foram analisados</p>
+            </MobileCard>
+          ) : (
+            <div className="space-y-3">
+              {comprovantes.map((c) => (
+                <MobileCard key={c.id} className="p-4">
                   <div className="flex items-start gap-3">
-                    <MobileAvatar name={aluno?.nome} size="md" />
+                    <MobileAvatar name={c.aluno?.nome} src={(c.aluno as any)?.avatarUrl ?? undefined} size="md" />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{aluno?.nome || "Aluno"}</p>
-                        <MobileBadge variant={statusBadge === "pago" ? "success" : statusBadge === "pendente" ? "warning" : "danger"} />
-                      </div>
-                      <p className="text-xs text-slate-500 mt-0.5">{pag.descricao}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-base font-black text-slate-900 dark:text-white">{formatCurrency(pag.valor)}</span>
-                        <span className="text-xs text-slate-400">
-                          Venc: {formatDate(pag.dataVencimento)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-                        <span className="text-xs text-slate-400">{formaLabel[pag.formaPagamento || "pix"] || "Pix"}</span>
-                        {pag.status !== "pago" ? (
-                          <button
-                            onClick={() => atualizar.mutate({ id: pag.id, status: "pago", dataPagamento: new Date().toISOString(), formaPagamento: pag.formaPagamento || "pix" })}
-                            className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
-                          >
-                            Marcar Pago
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => { setPagSelecionado(pag); reciboSheet.open(); }}
-                            className="text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors"
-                          >
-                            Ver Recibo
-                          </button>
-                        )}
-                      </div>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{c.aluno?.nome || "Aluno"}</p>
+                      <p className="text-xs text-slate-500 truncate">{c.descricao}</p>
+                      <p className="text-base font-black text-slate-900 dark:text-white mt-1">{formatCurrency(c.valor)}</p>
+                      {c.comprovanteUrl && (
+                        <a href={`/${c.comprovanteUrl}`} target="_blank" rel="noopener noreferrer" className="inline-block mt-2">
+                          <img src={`/${c.comprovanteUrl}`} alt="Comprovante" className="w-24 h-16 object-cover rounded-lg border border-slate-200 dark:border-slate-700" />
+                        </a>
+                      )}
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    <MobileButton
+                      variant="secondary"
+                      fullWidth
+                      size="sm"
+                      icon="cancel"
+                      onClick={() => { setPagSelecionado(c); setMotivoRejeicao(""); analiseSheet.open(); }}
+                    >
+                      Rejeitar
+                    </MobileButton>
+                    <MobileButton
+                      variant="primary"
+                      fullWidth
+                      size="sm"
+                      icon="check_circle"
+                      loading={aprovar.isPending}
+                      onClick={() => aprovar.mutate(c.id)}
+                    >
+                      Aprovar
+                    </MobileButton>
+                  </div>
                 </MobileCard>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )
         ) : (
-          <MobileCard className="text-center py-12">
-            <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-5xl">receipt_long</span>
-            <p className="text-slate-500 mt-3 text-sm">Nenhum pagamento encontrado</p>
-            <MobileButton variant="ghost" size="sm" icon="add_circle" className="mt-3" onClick={formSheet.open}>
-              Registrar pagamento
-            </MobileButton>
-          </MobileCard>
+          <>
+            {/* Filter */}
+            <MobileInput icon="search" placeholder="Buscar por aluno..." value={filtroNome} onChange={(e) => setFiltroNome(e.target.value)} />
+
+            <div className="mobile-tab-bar">
+              {statusTabs.map((t) => (
+                <button key={t.key} className={`mobile-tab-item ${filtroStatus === t.key ? "active" : ""}`} onClick={() => setFiltroStatus(t.key)}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* List */}
+            {isLoading ? (
+              <div className="space-y-2">{[1,2,3].map((i) => <Skeleton key={i} variant="card" />)}</div>
+            ) : filtrados.length > 0 ? (
+              <div className="space-y-2">
+                {filtrados.map((pag) => {
+                  const aluno = alunos.find((a: Aluno) => a.id === pag.usuarioId);
+                  const hoje = new Date();
+                  const venc = pag.dataVencimento ? new Date(pag.dataVencimento) : null;
+                  const isAtrasado = pag.status !== "pago" && venc && venc < hoje;
+                  const statusBadge = isAtrasado ? "atrasado" : pag.status as any;
+
+                  return (
+                    <MobileCard key={pag.id} className="p-4">
+                      <div className="flex items-start gap-3">
+                        <MobileAvatar name={aluno?.nome} src={aluno?.avatarUrl ?? undefined} size="md" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">{aluno?.nome || "Aluno"}</p>
+                            <MobileBadge variant={statusBadge === "pago" ? "success" : statusBadge === "pendente" ? "warning" : "danger"} />
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">{pag.descricao}</p>
+                          <div className="flex items-center justify-between mt-2">
+                            <span className="text-base font-black text-slate-900 dark:text-white">{formatCurrency(pag.valor)}</span>
+                            <span className="text-xs text-slate-400">
+                              Venc: {formatDate(pag.dataVencimento)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <span className="text-xs text-slate-400">{formaLabel[pag.formaPagamento || "pix"] || "Pix"}</span>
+                            {pag.status !== "pago" ? (
+                              <button
+                                onClick={() => atualizar.mutate({ id: pag.id, status: "pago", dataPagamento: new Date().toISOString(), formaPagamento: pag.formaPagamento || "pix" })}
+                                className="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                              >
+                                Marcar Pago
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => { setPagSelecionado(pag); reciboSheet.open(); }}
+                                className="text-xs font-bold text-slate-500 hover:text-indigo-600 transition-colors"
+                              >
+                                Ver Recibo
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </MobileCard>
+                  );
+                })}
+              </div>
+            ) : (
+              <MobileCard className="text-center py-12">
+                <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-5xl">receipt_long</span>
+                <p className="text-slate-500 mt-3 text-sm">Nenhum pagamento encontrado</p>
+                <MobileButton variant="ghost" size="sm" icon="add_circle" className="mt-3" onClick={formSheet.open}>
+                  Registrar pagamento
+                </MobileButton>
+              </MobileCard>
+            )}
+          </>
         )}
       </div>
 
-      {/* Bottom Sheet: Novo Pagamento */}
+      {/* Bottom Sheet: Análise de Comprovante */}
+      {pagSelecionado && analiseSheet.isOpen && (
+        <BottomSheet isOpen={analiseSheet.isOpen} onClose={() => { analiseSheet.close(); setPagSelecionado(null); setMotivoRejeicao(""); }} title="Analisar Comprovante">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <MobileAvatar name={pagSelecionado.aluno?.nome} src={pagSelecionado.aluno?.avatarUrl ?? undefined} size="md" />
+              <div>
+                <p className="font-semibold text-slate-900 dark:text-white">{pagSelecionado.aluno?.nome}</p>
+                <p className="text-xs text-slate-500">{pagSelecionado.descricao} · {formatCurrency(pagSelecionado.valor)}</p>
+              </div>
+            </div>
+            {pagSelecionado.comprovanteUrl && (
+              <a href={`/${pagSelecionado.comprovanteUrl}`} target="_blank" rel="noopener noreferrer">
+                <img src={`/${pagSelecionado.comprovanteUrl}`} alt="Comprovante" className="w-full rounded-xl object-cover max-h-64 border border-slate-200 dark:border-slate-700" />
+              </a>
+            )}
+            <MobileInput
+              label="Motivo da Rejeição (obrigatório)"
+              icon="edit_note"
+              placeholder="Ex: imagem ilegível, valor incorreto..."
+              value={motivoRejeicao}
+              onChange={(e) => setMotivoRejeicao(e.target.value)}
+            />
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <MobileButton variant="secondary" fullWidth onClick={() => { analiseSheet.close(); setPagSelecionado(null); setMotivoRejeicao(""); }}>Cancelar</MobileButton>
+              <MobileButton
+                variant="danger"
+                fullWidth
+                loading={rejeitar.isPending}
+                disabled={!motivoRejeicao.trim()}
+                onClick={() => {
+                  if (!motivoRejeicao.trim()) return;
+                  rejeitar.mutate({ id: pagSelecionado.id, motivo: motivoRejeicao });
+                }}
+              >
+                Rejeitar
+              </MobileButton>
+            </div>
+          </div>
+        </BottomSheet>
+      )}
+
+
       <BottomSheet isOpen={formSheet.isOpen} onClose={formSheet.close} title="Novo Pagamento">
         <div className="space-y-4">
           <div className="space-y-1.5">

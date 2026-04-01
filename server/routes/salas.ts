@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createSala, getSalaById, updateUser } from "../storage.js";
+import { createSala, getSalaById, updateUser, updateSala, deleteSala } from "../storage.js";
 import { db } from "../db.js";
 import { chaves, salas } from "../../shared/schema.js";
 import { eq } from "drizzle-orm";
@@ -70,9 +70,63 @@ router.get("/:id", async (req, res) => {
   try {
     const sala = await getSalaById(parseInt(req.params.id));
     if (!sala) return res.status(404).json({ message: "Sala não encontrada" });
-    res.json({ sala });
+    res.json(sala);
   } catch (e: any) {
     res.status(500).json({ message: "Erro ao buscar sala" });
+  }
+});
+
+// PATCH /api/salas/:id - Atualizar nome e meta
+router.patch("/:id", async (req: any, res: any) => {
+  try {
+    if (!req.session?.userId || req.session.userRole !== "admin") {
+      return res.status(401).json({ message: "Não autorizado" });
+    }
+    const id = parseInt(req.params.id);
+    const { nome, metaValor } = req.body;
+
+    const sala = await updateSala(id, {
+      ...(nome !== undefined && { nome }),
+      ...(metaValor !== undefined && { metaValor: parseFloat(metaValor) }),
+    });
+
+    res.json(sala);
+  } catch (e: any) {
+    console.error("Erro ao atualizar sala:", e);
+    res.status(500).json({ message: "Erro ao atualizar sala" });
+  }
+});
+
+// PATCH /api/salas/:id/senha - Alterar senha da sala
+router.patch("/:id/senha", async (req: any, res: any) => {
+  try {
+    if (!req.session?.userId || req.session.userRole !== "admin") {
+      return res.status(401).json({ message: "Não autorizado" });
+    }
+    const id = parseInt(req.params.id);
+    const { senha } = req.body;
+    if (!senha) return res.status(400).json({ message: "Senha é obrigatória" });
+
+    const sala = await updateSala(id, { senha });
+    res.json(sala);
+  } catch (e: any) {
+    console.error("Erro ao alterar senha:", e);
+    res.status(500).json({ message: "Erro ao alterar senha" });
+  }
+});
+
+// DELETE /api/salas/:id - Excluir sala em cascata
+router.delete("/:id", async (req: any, res: any) => {
+  try {
+    if (!req.session?.userId || req.session.userRole !== "admin") {
+      return res.status(401).json({ message: "Não autorizado" });
+    }
+    const id = parseInt(req.params.id);
+    await deleteSala(id);
+    res.status(204).send();
+  } catch (e: any) {
+    console.error("Erro ao deletar sala:", e);
+    res.status(500).json({ message: "Erro ao deletar sala" });
   }
 });
 

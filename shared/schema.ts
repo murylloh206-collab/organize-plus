@@ -9,6 +9,7 @@ export const tipoMovEnum = pgEnum("tipo_mov", ["entrada", "saida"]);
 export const statusRifaEnum = pgEnum("status_rifa", ["ativa", "encerrada", "sorteada"]);
 export const statusEventoEnum = pgEnum("status_evento", ["planejado", "realizado", "cancelado"]);
 export const statusTicketEnum = pgEnum("status_ticket", ["pago", "pendente", "cancelado"]);
+export const tipoNotificacaoEnum = pgEnum("tipo_notificacao", ["pagamento", "rifa", "sistema"]);
 
 // ---------- SALAS ----------
 export const salas = pgTable("salas", {
@@ -33,6 +34,7 @@ export const usuarios = pgTable("usuarios", {
   avatarUrl: text("avatar_url"),
   createdAt: timestamp("created_at").defaultNow(),
   valorArrecadadoRifas: decimal("valor_arrecadado_rifas", { precision: 12, scale: 2 }).default("0"),
+  metaIndividual: decimal("meta_individual", { precision: 12, scale: 2 }).default("0"),
 });
 
 // ---------- CHAVES ----------
@@ -166,6 +168,17 @@ export const caixa = pgTable("caixa", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ---------- NOTIFICAÇÕES ----------
+export const notificacoes = pgTable("notificacoes", {
+  id: serial("id").primaryKey(),
+  alunoId: integer("aluno_id").references(() => usuarios.id, { onDelete: "cascade" }).notNull(),
+  titulo: text("titulo").notNull(),
+  mensagem: text("mensagem").notNull(),
+  tipo: tipoNotificacaoEnum("tipo").default("sistema").notNull(),
+  lida: boolean("lida").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // ---------- ZOD SCHEMAS ----------
 export const insertSalaSchema = createInsertSchema(salas).omit({ id: true, createdAt: true });
 export const insertUsuarioSchema = createInsertSchema(usuarios).omit({ id: true, createdAt: true });
@@ -269,3 +282,5 @@ export type Evento = typeof eventos.$inferSelect;
 export type Meta = typeof metas.$inferSelect;
 export type CaixaMovimento = typeof caixa.$inferSelect;
 export type Chave = typeof chaves.$inferSelect;
+export type Notificacao = typeof notificacoes.$inferSelect;
+export type InsertNotificacao = typeof notificacoes.$inferInsert;
