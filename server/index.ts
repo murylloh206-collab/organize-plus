@@ -4,11 +4,9 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
-import { pool } from "./db.js";
-import {db} from "./db.js";
+import { pool, db } from "./db.js";  // <-- ADICIONE db AQUI
 import connectPgSimple from "connect-pg-simple";
 import dashboardRouter from "./routes/dashboard.js";
-import { sql } from "drizzle-orm";
 
 import authRoutes from "./routes/auth.js";
 import alunosRoutes from "./routes/alunos.js";
@@ -35,7 +33,7 @@ const PgSession = connectPgSimple(session);
 // ----- Middlewares -----
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL || 'https://seudominio.com'
+    ? process.env.FRONTEND_URL || 'https://organize-plus.onrender.com'
     : ['http://localhost:5173', 'http://localhost:5174', 'http://192.168.1.40:5173'],
   credentials: true
 };
@@ -44,12 +42,13 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servir arquivos estáticos da pasta uploads na raiz (sem prefixo /api)
+// Servir arquivos estáticos da pasta uploads
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
+// Configuração da sessão com pgPool
 app.use(session({
   store: new PgSession({
-    pool,
+    pool: pool,
     tableName: "user_sessions",
     createTableIfMissing: true,
   }),
@@ -59,7 +58,7 @@ app.use(session({
   cookie: {
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   },
 }));
 
@@ -78,35 +77,22 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/ranking", rankingRoutes);
 app.use("/api/notificacoes", notificacoesRoutes);
 
-
-
 // Health check
 app.get("/api/health", (_, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
-
-// Servir arquivos estáticos em produção
-if (process.env.NODE_ENV === 'production') {
-  const staticPath = path.join(__dirname, '../client/dist');
-  
-  app.use(express.static(staticPath));
-  
-  // Rota catch-all para SPA (React Router)
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(staticPath, 'index.html'));
-  });
-  
-  console.log(`📁 Servindo arquivos estáticos de: ${staticPath}`);
-}
 
 // Rota de debug para verificar conexão com banco
 app.get("/api/debug/db", async (req, res) => {
   try {
-    const result = await db.execute("SELECT 1 as test");
+    // Teste usando o pool
+    const result = await pool.query("SELECT 1 as test");
     res.json({ 
       status: "ok", 
       dbConnected: true,
+      result: result.rows,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    console.error("[DEBUG DB] Erro:", error);
     res.status(500).json({ 
       status: "error", 
       dbConnected: false, 
@@ -127,7 +113,7 @@ app.get("/api/debug/session", (req, res) => {
   });
 });
 
-// Rota de debug para verificar o status do servidor
+// Rota de debug do servidor
 app.get("/api/debug", (req, res) => {
   res.json({
     status: "ok",
@@ -140,6 +126,20 @@ app.get("/api/debug", (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Servir arquivos estáticos em produção
+if (process.env.NODE_ENV === 'production') {
+  const staticPath = path.join(__dirname, '../client/dist');
+  
+  app.use(express.static(staticPath));
+  
+  // Rota catch-all para SPA (React Router)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(staticPath, 'index.html'));
+  });
+  
+  console.log(`📁 Servindo arquivos estáticos de: ${staticPath}`);
+}
 
 app.listen(PORT, () => {
   console.log(`\n🚀 Organizze+ API rodando em http://localhost:${PORT}`);
