@@ -5,8 +5,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { config } from "dotenv";
 import { pool } from "./db.js";
+import {db} from "./db.js";
 import connectPgSimple from "connect-pg-simple";
 import dashboardRouter from "./routes/dashboard.js";
+import { sql } from "drizzle-orm";
 
 import authRoutes from "./routes/auth.js";
 import alunosRoutes from "./routes/alunos.js";
@@ -94,6 +96,50 @@ if (process.env.NODE_ENV === 'production') {
   
   console.log(`📁 Servindo arquivos estáticos de: ${staticPath}`);
 }
+
+// Rota de debug para verificar conexão com banco
+app.get("/api/debug/db", async (req, res) => {
+  try {
+    const result = await db.execute("SELECT 1 as test");
+    res.json({ 
+      status: "ok", 
+      dbConnected: true,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      status: "error", 
+      dbConnected: false, 
+      error: String(error),
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Rota de debug da sessão
+app.get("/api/debug/session", (req, res) => {
+  res.json({
+    userId: req.session?.userId,
+    userRole: req.session?.userRole,
+    salaId: req.session?.salaId,
+    chaveValidada: req.session?.chaveValidada,
+    hasSession: !!req.session
+  });
+});
+
+// Rota de debug para verificar o status do servidor
+app.get("/api/debug", (req, res) => {
+  res.json({
+    status: "ok",
+    session: {
+      userId: req.session?.userId,
+      userRole: req.session?.userRole,
+      salaId: req.session?.salaId,
+    },
+    env: process.env.NODE_ENV,
+    timestamp: new Date().toISOString()
+  });
+});
 
 app.listen(PORT, () => {
   console.log(`\n🚀 Organizze+ API rodando em http://localhost:${PORT}`);
