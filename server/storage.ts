@@ -699,3 +699,186 @@ export async function getAlunoDashboardStats(alunoId: number, salaId: number) {
     }
   };
 }
+// ========== FUNÇÕES ADICIONAIS PARA PAGAMENTOS ==========
+
+export async function confirmarPagamentoViaComprovante(
+  pagamentoId: number,
+  comprovanteUrl: string,
+  descricaoPagamento?: string
+) {
+  try {
+    // Buscar pagamento atual
+    const { data: pagamento, error: findError } = await supabaseAdmin
+      .from("pagamentos")
+      .select("*")
+      .eq("id", pagamentoId)
+      .single();
+    
+    if (findError || !pagamento) {
+      throw new Error("Pagamento não encontrado");
+    }
+
+    if (pagamento.status === "pago") {
+      throw new Error("Este pagamento já foi pago");
+    }
+
+    // Atualizar pagamento
+    const { data, error } = await supabaseAdmin
+      .from("pagamentos")
+      .update({
+        status: "pago",
+        data_pagamento: new Date().toISOString(),
+        comprovante_url: comprovanteUrl,
+        descricao_pagamento: descricaoPagamento || null,
+        status_comprovante: "aprovado",
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", pagamentoId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Atualizar evento relacionado
+    const { data: evento } = await supabaseAdmin
+      .from("eventos")
+      .select("*")
+      .eq("titulo", `📅 Vencimento: ${pagamento.descricao}`)
+      .eq("status", "planejado")
+      .single();
+
+    if (evento) {
+      await supabaseAdmin
+        .from("eventos")
+        .update({
+          status: "realizado",
+          descricao: `${evento.descricao} - Pago em ${new Date().toLocaleDateString()}`
+        })
+        .eq("id", evento.id);
+    }
+
+    return data;
+  } catch (error) {
+    console.error("[confirmarPagamentoViaComprovante] Erro:", error);
+    throw error;
+  }
+}
+
+// ========== FUNÇÃO PARA RIFAS - MEUS TICKETS ==========
+
+export async function getMeusTickets(vendedorId: number) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("tickets_rifa")
+      .select(`
+        *,
+        rifa:rifas(id, nome, premio)
+      `)
+      .eq("vendedor_id", vendedorId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error("[getMeusTickets] Erro:", error);
+    return [];
+  }
+}
+
+// ========== FUNÇÃO PARA RANKING ==========
+
+export async function getRankingBySala(salaId: number) {
+  try {
+    // Buscar todos os alunos da sala
+    const { data: alunos, error: alunosError } = await supabaseAdmin
+      .from("usuarios")
+      .select("id, nome, email, avatar_url, valor_arrecadado_rifas, meta_individual")
+      .eq("sala_id", salaId)
+      .eq("role", "aluno");
+
+    if (alunosError) throw alunosError;
+
+    // Para cada aluno, calcular total de pagamentos e rifas
+    const ranking = await Promise.all(
+      (alunos || []).map(async (aluno) => {
+        // Pagamentos pagos
+        const { data: pagamentos } = await supabaseAdmin
+          .from("pagamentos")
+          .select("valor")
+          .eq("usuario_id", aluno.id)
+          .eq("status", "pago");
+
+        const totalPagamentos = pagamentos?.reduce((sum, p) => sum + parseFloat(p.valor), 0) || 0;
+
+        // Rifas vendidas (tickets pagos)
+        const { data: tickets } = await supabaseAdmin
+          .from("tickets_rifa")
+          .select("valor")
+          .eq("vendedor_id", aluno.id)
+          .eq("status", "pago");
+
+        const totalRifas = tickets?.reduce((sum, t) => sum + parseFloat(t.valor), 0) || 0;
+
+        const totalArrecadado = totalPagamentos + totalRifas;
+        const metaIndividual = parseFloat(aluno.meta_individual || "0");
+
+        return {
+          ...aluno,
+          totalPagamentos,
+          totalRifas,
+          totalArrecadado,
+          metaIndividual,
+          percentualMeta: metaIndividual > 0 ? Math.round((totalArrecadado / metaIndividual) * 100) : 0
+        };
+      })
+    );
+
+    // Ordenar por total arrecadado (decrescente)
+    return ranking.sort((a, b) => b.totalArrecadado - a.totalArrecadado);
+  } catch (error) {
+    console.error("[getRankingBySala] Erro:", error);
+    return [];
+  }
+}
+
+// ========== FUNÇÃO PARA VALIDAR CHAVE ==========
+
+export async function validateChave(chave: string) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("chaves")
+      .select("*")
+      .eq("chave", chave)
+      .single();
+
+    if (error || !data) {
+      return { valida: false, motivo: "Chave não encontrada" };
+    }
+
+    if (!data.ativa) {
+      return { valida: false, motivo: "Chave inativa ou já utilizada" };
+    }
+
+    return { valida: true, registro: data, tipo: "premium" };
+  } catch (error) {
+    console.error("[validateChave] Erro:", error);
+    return { valida: false, motivo: "Erro ao validar chave" };
+  }
+}
+// ========== FUNÇÃO PARA BUSCAR PAGAMENTO POR ID ==========
+
+export async function getPagamentoById(id: number) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("pagamentos")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error("[getPagamentoById] Erro:", error);
+    return null;
+  }
+}
