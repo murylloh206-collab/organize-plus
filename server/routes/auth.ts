@@ -12,7 +12,6 @@ const router = Router();
 router.get("/me", async (req, res) => {
   if (!req.session?.userId) return res.status(401).json({ message: "Não autenticado" });
   
-  // Recarregar dados atualizados na sessão
   await carregarUsuarioSessao(req, req.session.userId);
   
   res.json({ 
@@ -27,23 +26,32 @@ router.post("/login", async (req, res) => {
   try {
     const { email, senha } = req.body;
     
+    console.log("[LOGIN] Tentativa para email:", email);
+    
     const user = await getUserByEmail(email);
     if (!user) {
+      console.log("[LOGIN] Usuário não encontrado");
       return res.status(401).json({ message: "Credenciais inválidas" });
     }
     
-    const senhaValida = await verificarSenha(senha, user.senhaHash);
+    console.log("[LOGIN] Usuário encontrado, verificando senha...");
+    
+    // CORREÇÃO: usar senha_hash em vez de senhaHash
+    const senhaValida = await verificarSenha(senha, user.senha_hash);
     if (!senhaValida) {
+      console.log("[LOGIN] Senha inválida");
       return res.status(401).json({ message: "Credenciais inválidas" });
     }
     
-    // Usar a função para carregar todos os dados do usuário na sessão
+    console.log("[LOGIN] Login bem-sucedido!");
+    
     await carregarUsuarioSessao(req, user.id);
     
-    const { senhaHash: _, ...safeUser } = user;
+    // CORREÇÃO: remover senha_hash do objeto retornado
+    const { senha_hash: _, ...safeUser } = user;
     res.json(safeUser);
   } catch (error) {
-    console.error("Erro no login:", error);
+    console.error("[LOGIN] Erro:", error);
     res.status(500).json({ message: "Erro interno" });
   }
 });
@@ -55,12 +63,10 @@ router.post("/register", async (req, res) => {
     const existing = await getUserByEmail(data.email);
     if (existing) return res.status(400).json({ message: "Email já cadastrado" });
 
-    // Validar chave
     const chaveResult = await validarChave(data.chave);
     if (!chaveResult.valida) return res.status(400).json({ message: chaveResult.motivo });
     const chaveRegistro = chaveResult.registro!;
 
-    // Criar sala se necessário
     let salaId = data.salaId;
     if (!salaId && data.nomeSala) {
       const codigo = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -78,20 +84,17 @@ router.post("/register", async (req, res) => {
       role: "admin", salaId,
     });
 
-    // Marcar chave como usada
     await marcarChaveUsada(chaveRegistro.id, user.id);
-
-    // Carregar dados na sessão
     await carregarUsuarioSessao(req, user.id);
 
-    const { senhaHash: _, ...userSafe } = user;
+    const { senha_hash: _, ...userSafe } = user;
     res.json({ user: userSafe, tipo: "premium" });
   } catch (e: any) {
     res.status(400).json({ message: e.message });
   }
 });
 
-// POST /api/auth/register-comissao (sem exigir chave)
+// POST /api/auth/register-comissao
 router.post("/register-comissao", async (req, res) => {
   try {
     const { nome, email, senha, celular } = req.body;
@@ -103,11 +106,9 @@ router.post("/register-comissao", async (req, res) => {
     if (existing) return res.status(400).json({ message: "Email já cadastrado" });
 
     const user = await createUser({ nome, email, senha, role: "admin", salaId: undefined });
-
-    // Carregar dados na sessão
     await carregarUsuarioSessao(req, user.id);
 
-    const { senhaHash: _, ...userSafe } = user;
+    const { senha_hash: _, ...userSafe } = user;
     res.status(201).json({ user: userSafe });
   } catch (e: any) {
     console.error("Erro no registro da comissão:", e);
@@ -120,7 +121,6 @@ router.post("/register-aluno", async (req, res) => {
   try {
     const { nome, email, senha, celular, turmaId, senhaTurma } = req.body;
     
-    // Validar os campos obrigatórios
     if (!nome || !email || !senha || !celular || !turmaId || !senhaTurma) {
       return res.status(400).json({ 
         message: "Dados incompletos",
@@ -128,24 +128,20 @@ router.post("/register-aluno", async (req, res) => {
       });
     }
     
-    // Verificar se a turma existe
     const sala = await getSalaById(parseInt(turmaId));
     if (!sala) {
       return res.status(404).json({ message: "Turma não encontrada" });
     }
     
-    // Verificar a senha da turma (caso ela exista)
     if (sala.senha && sala.senha !== senhaTurma) {
       return res.status(401).json({ message: "Senha da turma incorreta" });
     }
     
-    // Verificar se email já existe
     const existing = await getUserByEmail(email);
     if (existing) {
       return res.status(400).json({ message: "Email já cadastrado" });
     }
     
-    // Criar o usuário
     const user = await createUser({
       nome,
       email,
@@ -155,10 +151,9 @@ router.post("/register-aluno", async (req, res) => {
       salaId: parseInt(turmaId)
     });
     
-    // Carregar dados na sessão
     await carregarUsuarioSessao(req, user.id);
     
-    const { senhaHash: _, ...userSafe } = user;
+    const { senha_hash: _, ...userSafe } = user;
     res.status(201).json({ user: userSafe });
   } catch (e: any) {
     console.error("Erro no registro de aluno:", e);
@@ -173,7 +168,6 @@ router.post("/validate-chave", async (req, res) => {
   const result = await validarChave(chave);
   if (!result.valida) return res.status(400).json({ message: result.motivo });
 
-  // Salvar na sessão que o usuário validou uma chave
   req.session.chaveValidada = true;
   if (result.registro) {
     req.session.chaveId = result.registro.id;
