@@ -6,7 +6,7 @@ import { eq } from "drizzle-orm";
 
 const router = Router();
 
-// GET /api/salas - listar todas as salas
+// GET /api/salas - listar todas as salas (sempre retorna array)
 router.get("/", async (req, res) => {
   try {
     console.log("[GET /salas] Buscando todas as salas...");
@@ -14,8 +14,9 @@ router.get("/", async (req, res) => {
     console.log(`[GET /salas] Encontradas ${todasSalas.length} salas`);
     res.json(todasSalas);
   } catch (error) {
-    console.error("[GET /salas] Erro:", error);
-    res.status(500).json({ message: "Erro interno ao buscar salas", error: String(error) });
+    // IMPORTANTE: retornar array vazio para não quebrar o .map() no frontend
+    console.error("[GET /salas] Erro ao buscar salas:", error);
+    res.json([]); // nunca retornar objeto de erro aqui
   }
 });
 

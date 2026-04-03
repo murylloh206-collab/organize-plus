@@ -35,9 +35,18 @@ export default function AcessoPage() {
     if (modo === "cadastrar" && tipo === "aluno") {
       setCarregandoTurmas(true);
       fetch("/api/salas")
-        .then((r) => r.json())
-        .then((data) => setTurmas(data))
-        .catch(() => {})
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json();
+        })
+        .then((data) => {
+          // Garante que sempre setamos um array, mesmo se a API retornar objeto de erro
+          setTurmas(Array.isArray(data) ? data : []);
+        })
+        .catch((err) => {
+          console.warn("[acesso] Falha ao carregar turmas:", err.message);
+          setTurmas([]); // fallback seguro
+        })
         .finally(() => setCarregandoTurmas(false));
     }
   }, [modo, tipo]);
