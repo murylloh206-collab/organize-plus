@@ -1,8 +1,6 @@
 import { google } from 'googleapis';
 import { OAuth2Client } from 'google-auth-library';
-import { db } from '../db.js';
-import { eventos } from '../../shared/schema.js';
-import { eq } from 'drizzle-orm';
+// Service do google calendar sem BD Drizzle
 
 // Configurações do OAuth2
 const oauth2Client = new google.auth.OAuth2(

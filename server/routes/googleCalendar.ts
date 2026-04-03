@@ -1,9 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../auth.js";
 import { getAuthUrl, getTokensFromCode, createCalendarEvent, listCalendarEvents } from "../services/googleCalendar.js";
-import { eventos } from "../../shared/schema.js";
-import { db } from "../db.js";
-import { eq } from "drizzle-orm";
+import { supabaseAdmin } from "../db.js";
 
 const router = Router();
 
@@ -46,7 +44,7 @@ router.post("/sync-event/:id", requireAuth, async (req, res) => {
     const eventoId = parseInt(req.params.id);
 
     // Buscar evento no banco
-    const [evento] = await db.select().from(eventos).where(eq(eventos.id, eventoId));
+    const { data: evento } = await supabaseAdmin.from("eventos").select("*").eq("id", eventoId).single();
     
     if (!evento) {
       return res.status(404).json({ message: "Evento não encontrado" });
@@ -66,9 +64,9 @@ router.post("/sync-event/:id", requireAuth, async (req, res) => {
     });
 
     // Salvar ID do Google Calendar no evento
-    await db.update(eventos)
-      .set({ googleEventId: googleEvent.id })
-      .where(eq(eventos.id, eventoId));
+    await supabaseAdmin.from("eventos")
+      .update({ google_event_id: googleEvent.id })
+      .eq("id", eventoId);
 
     res.json({ success: true, googleEvent });
   } catch (error) {

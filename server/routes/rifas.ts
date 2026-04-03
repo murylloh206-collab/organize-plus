@@ -13,12 +13,9 @@ import {
   updateTicketData,
   deleteTicket,
   marcarRifaComoSorteada,
-  getAlunos,
   createNotificacao,
 } from "../storage.js";
-import { db } from "../db.js";
-import { ticketsRifa, rifas, usuarios } from "../../shared/schema.js";
-import { eq, desc, and } from "drizzle-orm";
+import { supabaseAdmin } from "../db.js";
 
 const router = Router();
 
@@ -50,29 +47,36 @@ router.get("/tickets", requireAdmin, async (req: any, res: any) => {
   try {
     const salaId = req.session.salaId;
     
-    const tickets = await db
-      .select({
-        id: ticketsRifa.id,
-        rifaId: ticketsRifa.rifaId,
-        vendedorId: ticketsRifa.vendedorId,
-        vendedorNome: usuarios.nome,
-        compradorNome: ticketsRifa.compradorNome,
-        compradorContato: ticketsRifa.compradorContato,
-        valor: ticketsRifa.valor,
-        numero: ticketsRifa.numero,
-        status: ticketsRifa.status,
-        createdAt: ticketsRifa.createdAt,
-        updatedAt: ticketsRifa.updatedAt,
-        rifaNome: rifas.nome,
-        rifaPremio: rifas.premio
-      })
-      .from(ticketsRifa)
-      .leftJoin(usuarios, eq(ticketsRifa.vendedorId, usuarios.id))
-      .leftJoin(rifas, eq(ticketsRifa.rifaId, rifas.id))
-      .where(eq(rifas.salaId, salaId))
-      .orderBy(desc(ticketsRifa.createdAt));
+    const { data: ticketsInfo } = await supabaseAdmin.from("tickets_rifa").select("*, vendedor:usuarios!vendedor_id(nome), rifa:rifas!rifa_id(nome, premio)").eq("rifa.sala_id", salaId).order("created_at", { ascending: false });
+
+    // Filtrar localmente senao temos que fazer queries separadas devido a limitacoes rls/inner join 
+    const { data: rifasData } = await supabaseAdmin.from("rifas").select("id, nome, premio").eq("sala_id", salaId);
+    const validRifaIds = (rifasData || []).map(r => r.id);
     
-    res.json(tickets);
+    let ticketsFinal: any[] = [];
+    if(validRifaIds.length > 0) {
+      const { data: ticketsData } = await supabaseAdmin.from("tickets_rifa").select("*, vendedor:usuarios!vendedor_id(nome)").in("rifa_id", validRifaIds).order("created_at", { ascending: false });
+      ticketsFinal = (ticketsData || []).map((t: any) => {
+        const r = rifasData?.find(r => r.id === t.rifa_id);
+        return {
+          id: t.id,
+          rifaId: t.rifa_id,
+          vendedorId: t.vendedor_id,
+          vendedorNome: t.vendedor?.nome,
+          compradorNome: t.comprador_nome,
+          compradorContato: t.comprador_contato,
+          valor: t.valor,
+          numero: t.numero,
+          status: t.status,
+          createdAt: t.created_at,
+          updatedAt: t.updated_at,
+          rifaNome: r?.nome,
+          rifaPremio: r?.premio
+        }
+      });
+    }
+
+    res.json(ticketsFinal);
   } catch (error) {
     console.error("Erro ao buscar tickets da sala:", error);
     res.status(500).json({ message: "Erro interno" });
@@ -114,29 +118,29 @@ router.get("/meus-tickets", requireAuth, async (req, res) => {
     
     console.log("[meus-tickets] ✅ Buscando tickets para vendedorId:", vendedorIdNum);
     
-    const tickets = await db
-      .select({
-        id: ticketsRifa.id,
-        rifaId: ticketsRifa.rifaId,
-        vendedorId: ticketsRifa.vendedorId,
-        compradorNome: ticketsRifa.compradorNome,
-        compradorContato: ticketsRifa.compradorContato,
-        valor: ticketsRifa.valor,
-        numero: ticketsRifa.numero,
-        status: ticketsRifa.status,
-        createdAt: ticketsRifa.createdAt,
-        updatedAt: ticketsRifa.updatedAt,
-        rifaNome: rifas.nome,
-        rifaPremio: rifas.premio
-      })
-      .from(ticketsRifa)
-      .leftJoin(rifas, eq(ticketsRifa.rifaId, rifas.id))
-      .where(eq(ticketsRifa.vendedorId, vendedorIdNum))
-      .orderBy(desc(ticketsRifa.createdAt));
+    const { data: ticketsData } = await supabaseAdmin.from("tickets_rifa")
+      .select("*, rifa:rifas!rifa_id(nome, premio)")
+      .eq("vendedor_id", vendedorIdNum)
+      .order("created_at", { ascending: false });
+      
+    const finalTickets = (ticketsData || []).map((t: any) => ({
+        id: t.id,
+        rifaId: t.rifa_id,
+        vendedorId: t.vendedor_id,
+        compradorNome: t.comprador_nome,
+        compradorContato: t.comprador_contato,
+        valor: t.valor,
+        numero: t.numero,
+        status: t.status,
+        createdAt: t.created_at,
+        updatedAt: t.updated_at,
+        rifaNome: t.rifa?.nome,
+        rifaPremio: t.rifa?.premio
+    }));
     
-    console.log(`[meus-tickets] ✅ Encontrados ${tickets?.length || 0} tickets`);
+    console.log(`[meus-tickets] ✅ Encontrados ${finalTickets.length} tickets`);
     
-    return res.status(200).json(tickets || []);
+    return res.status(200).json(finalTickets);
     
   } catch (error) {
     console.error("[meus-tickets] ❌ Erro ao buscar tickets:", error);

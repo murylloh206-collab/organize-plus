@@ -1,9 +1,7 @@
 import bcrypt from "bcrypt";
-import { db } from "./db.js";
-import { usuarios, chaves, salas } from "../shared/schema.js";
-import { eq } from "drizzle-orm";
 import type { Request, Response, NextFunction } from "express";
 import "express-session";
+import { supabaseAdmin } from "./db.js";
 
 declare module "express-session" {
   interface SessionData {
@@ -23,21 +21,19 @@ export async function verificarSenha(senha: string, hash: string) {
   return bcrypt.compare(senha, hash);
 }
 
-// Função para carregar dados do usuário na sessão
 export async function carregarUsuarioSessao(req: Request, userId: number) {
-  const [user] = await db
-    .select()
-    .from(usuarios)
-    .where(eq(usuarios.id, userId))
-    .limit(1);
-  
-  if (user) {
-    req.session.userId = user.id;
-    req.session.userRole = user.role;
-    req.session.salaId = user.salaId;
-    return true;
-  }
-  return false;
+  const { data: user, error } = await supabaseAdmin
+    .from("usuarios")
+    .select("*")
+    .eq("id", userId)
+    .single();
+
+  if (error || !user) return false;
+
+  req.session.userId = user.id;
+  req.session.userRole = user.role;
+  req.session.salaId = user.sala_id; // Coluna vem como sala_id no DB
+  return true;
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -58,13 +54,13 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction) {
 }
 
 export async function validarChave(chave: string) {
-  const [registro] = await db
-    .select()
-    .from(chaves)
-    .where(eq(chaves.chave, chave))
-    .limit(1);
+  const { data: registro, error } = await supabaseAdmin
+    .from("chaves")
+    .select("*")
+    .eq("chave", chave)
+    .single();
 
-  if (!registro) return { valida: false, motivo: "Chave não encontrada" };
+  if (error || !registro) return { valida: false, motivo: "Chave não encontrada" };
   if (!registro.ativa) return { valida: false, motivo: "Chave inativa ou já utilizada" };
 
   return { valida: true, registro, tipo: "premium" };

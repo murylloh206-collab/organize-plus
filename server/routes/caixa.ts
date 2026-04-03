@@ -1,15 +1,12 @@
 import { Router } from "express";
 import { requireAuth, requireAdmin } from "../auth.js";
 import { getCaixaBySala, createMovimento, getSaldoCaixa } from "../storage.js";
-import { db } from "../db.js";
-import { caixa } from "../../shared/schema.js";
-import { eq } from "drizzle-orm";
+import { supabaseAdmin } from "../db.js";
 
 const router = Router();
 
 router.get("/", requireAuth, async (req, res) => {
   const result = await getCaixaBySala(req.session.salaId!);
-  // Já retorna no formato { mov, usuario }
   res.json(result);
 });
 
@@ -20,10 +17,9 @@ router.get("/saldo", requireAuth, async (req, res) => {
 
 router.post("/", requireAdmin, async (req, res) => {
   try {
-    // Converte a data de string para Date
     const dados = {
       ...req.body,
-      data: new Date(req.body.data),
+      data: new Date(req.body.data).toISOString(),
       salaId: req.session.salaId!,
       createdBy: req.session.userId!,
     };
@@ -36,7 +32,6 @@ router.post("/", requireAdmin, async (req, res) => {
   }
 });
 
-// ADICIONAR: PATCH para editar movimentação
 router.patch("/:id", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -46,17 +41,18 @@ router.patch("/:id", requireAdmin, async (req, res) => {
     if (descricao !== undefined) dadosAtualizados.descricao = descricao;
     if (valor !== undefined) dadosAtualizados.valor = valor;
     if (tipo !== undefined) dadosAtualizados.tipo = tipo;
-    if (data !== undefined) dadosAtualizados.data = new Date(data);
+    if (data !== undefined) dadosAtualizados.data = new Date(data).toISOString();
     if (categoria !== undefined) dadosAtualizados.categoria = categoria;
-    dadosAtualizados.updatedAt = new Date();
+    dadosAtualizados.updated_at = new Date().toISOString();
     
-    const [mov] = await db
-      .update(caixa)
-      .set(dadosAtualizados)
-      .where(eq(caixa.id, parseInt(id)))
-      .returning();
+    const { data: mov, error } = await supabaseAdmin
+      .from("caixa")
+      .update(dadosAtualizados)
+      .eq("id", parseInt(id))
+      .select()
+      .single();
     
-    if (!mov) {
+    if (error || !mov) {
       return res.status(404).json({ message: "Movimentação não encontrada" });
     }
     
@@ -67,17 +63,16 @@ router.patch("/:id", requireAdmin, async (req, res) => {
   }
 });
 
-// ADICIONAR: DELETE para remover movimentação
 router.delete("/:id", requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     
-    const [mov] = await db
-      .delete(caixa)
-      .where(eq(caixa.id, parseInt(id)))
-      .returning();
+    const { error } = await supabaseAdmin
+      .from("caixa")
+      .delete()
+      .eq("id", parseInt(id));
     
-    if (!mov) {
+    if (error) {
       return res.status(404).json({ message: "Movimentação não encontrada" });
     }
     

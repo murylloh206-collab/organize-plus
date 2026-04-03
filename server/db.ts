@@ -24,13 +24,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 // Cliente de serviço (para operações administrativas - usa service key)
-export const supabaseAdmin = supabaseServiceKey 
+export const supabaseAdmin = supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    })
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  })
   : supabase;
 
 // Testar conexão
