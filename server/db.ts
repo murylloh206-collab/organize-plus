@@ -1,80 +1,51 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
-import pg from "pg";
-import * as schema from "../shared/schema.js";
+import { createClient } from '@supabase/supabase-js';
 import { config } from "dotenv";
-import dns from "dns";
 
 config();
 
-// Forçar resolução de DNS para IPv4
-dns.setDefaultResultOrder("ipv4first");
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
 
-const rawUrl = process.env.DATABASE_URL;
-
-if (!rawUrl) {
-  console.error("❌ DATABASE_URL não configurada!");
-  throw new Error("DATABASE_URL não configurada");
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error("❌ SUPABASE_URL ou SUPABASE_ANON_KEY não configuradas!");
+  throw new Error("Variáveis do Supabase não configuradas");
 }
 
-// Remover quaisquer parâmetros de query (?pgbouncer=true, etc.)
-// O Transaction Pooler do Supabase (porta 6543) não aceita esses parâmetros
-const connectionString = rawUrl.split("?")[0];
+console.log("[DB] Conectando ao Supabase Data API...");
+console.log("[DB] URL:", supabaseUrl);
 
-// Log seguro (oculta a senha)
-const safeUrl = connectionString.replace(/:[^:@]*@/, ":***@");
-console.log("[DB] URL de conexão (segura):", safeUrl);
-
-// Detectar automaticamente o tipo de conexão pela porta
-const isPooler = connectionString.includes(":6543/");
-console.log(
-  `[DB] Modo: ${isPooler ? "Transaction Pooler (6543)" : "Conexão Direta (5432)"}`
-);
-
-// ─── Cliente postgres.js para o Drizzle ORM ───────────────────────────────
-const client = postgres(connectionString, {
-  max: 10,
-  idle_timeout: 20,
-  connect_timeout: 30,
-  // SSL obrigatório para Supabase (tanto pooler quanto direto)
-  ssl: "require",
-  // Desabilitar prepared statements ao usar pgBouncer/Pooler em modo transaction
-  prepare: false,
-});
-
-// ─── Pool pg (node-postgres) para connect-pg-simple (sessões) ─────────────
-const pgPool = new pg.Pool({
-  connectionString,
-  ssl: {
-    rejectUnauthorized: false, // Supabase usa certificado auto-assinado
+// Cliente anônimo (para operações públicas)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
   },
-  max: 5,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
 });
 
-pgPool.on("error", (err) => {
-  console.error("[DB Pool] Erro inesperado no pool de conectores:", err.message);
-});
+// Cliente de serviço (para operações administrativas - usa service key)
+export const supabaseAdmin = supabaseServiceKey 
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+    })
+  : supabase;
 
-pgPool.on("connect", () => {
-  console.log("[DB Pool] Nova conexão estabelecida com o PostgreSQL");
-});
-
-// Teste de conexão ao iniciar
+// Testar conexão
 (async () => {
   try {
-    const result = await pgPool.query("SELECT NOW() as now");
-    console.log(
-      "[DB] ✅ Conexão com o banco estabelecida:",
-      result.rows[0].now
-    );
+    const { data, error } = await supabase.from('salas').select('count', { count: 'exact', head: true });
+    if (error) {
+      console.error("[DB] ❌ Erro ao conectar:", error.message);
+      console.error("[DB] Verifique se as tabelas já foram criadas");
+    } else {
+      console.log("[DB] ✅ Conexão com Supabase estabelecida!");
+    }
   } catch (err: any) {
-    console.error("[DB] ❌ Falha ao conectar com o banco:", err.message);
-    console.error("[DB] Verifique a DATABASE_URL e as configurações de rede");
+    console.error("[DB] ❌ Falha ao conectar:", err.message);
   }
 })();
 
-export const db = drizzle(client, { schema });
-export const pool = pgPool;
-export { client };
+export { supabase as db };
