@@ -1,13 +1,26 @@
 import { Router } from "express";
 import { getAlunosBySala, getSalaById, createSala } from "../storage.js";
+import { supabaseAdmin } from "../db.js";
 
 const router = Router();
 
-// GET /api/salas - listar todas as salas
+// GET /api/salas - listar todas as salas (acesso público para cadastro de aluno)
 router.get("/", async (req, res) => {
   try {
-    console.log("[GET /salas] Rota substituída por listar com base em storage (necessário admin).");
-    res.json([]);
+    console.log("[GET /salas] Buscando todas as salas...");
+    
+    const { data, error } = await supabaseAdmin
+      .from("salas")
+      .select("id, nome, codigo")
+      .order("created_at", { ascending: false });
+    
+    if (error) {
+      console.error("[GET /salas] Erro:", error);
+      return res.json([]);
+    }
+    
+    console.log(`[GET /salas] Retornando ${data?.length || 0} salas`);
+    res.json(data || []);
   } catch (error) {
     console.error("[GET /salas] Erro:", error);
     res.json([]);
@@ -39,8 +52,6 @@ router.post("/", async (req, res) => {
     }
 
     if (!req.session.chaveValidada || !req.session.chaveId) {
-      // Remover a validação da chave apenas para fins de simplificação se necessário
-      // mas vamos manter porque é o fluxo normal.
       return res.status(403).json({
         message: "É necessária uma chave de acesso válida para criar uma turma",
         requiresChave: true,
