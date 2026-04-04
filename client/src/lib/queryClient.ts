@@ -2,6 +2,12 @@
 import { QueryClient } from "@tanstack/react-query";
 import { useGlobalLoading } from "../hooks/useGlobalLoading";
 
+// URL do backend no Render
+// Usa fallback para desenvolvimento local
+const API_URL = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL 
+  ? import.meta.env.VITE_API_URL 
+  : '';
+
 // Contador para controlar múltiplas requisições
 let activeRequests = 0;
 
@@ -32,7 +38,6 @@ function setGlobalLoading(loading: boolean) {
       }
     }
   } catch (error) {
-    // Fallback caso o hook não esteja disponível
     console.warn("Global loading não disponível");
   }
 }
@@ -44,8 +49,6 @@ export async function apiRequest(
   isFormData?: boolean
 ) {
   const isForm = isFormData || body instanceof FormData;
-  
-  // Só mostra loading para métodos que modificam dados
   const shouldShowLoading = ["POST", "PUT", "PATCH", "DELETE"].includes(method);
   
   if (shouldShowLoading) {
@@ -53,14 +56,16 @@ export async function apiRequest(
   }
   
   try {
-    const res = await fetch(`/api${path}`, {
+    const url = `${API_URL}/api${path}`;
+    console.log(`[API] ${method} ${url}`);
+    
+    const res = await fetch(url, {
       method,
       headers: isForm ? {} : body ? { "Content-Type": "application/json" } : {},
       credentials: "include",
       body: isForm ? (body as FormData) : body ? JSON.stringify(body) : undefined,
     });
 
-    // Para respostas 204 (No Content), retornar null em vez de tentar parsear JSON
     if (res.status === 204) {
       return null;
     }
@@ -76,7 +81,6 @@ export async function apiRequest(
       throw new Error(errorMessage);
     }
 
-    // Para métodos que normalmente não retornam corpo
     if (method === "DELETE") {
       return null;
     }
@@ -86,5 +90,5 @@ export async function apiRequest(
     if (shouldShowLoading) {
       setGlobalLoading(false);
     }
-  }
 }
+  }
