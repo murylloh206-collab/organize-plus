@@ -21,7 +21,7 @@ export async function verificarSenha(senha: string, hash: string) {
   return bcrypt.compare(senha, hash);
 }
 
-export async function carregarUsuarioSessao(req: Request, userId: number) {
+export async function carregarUsuarioSessao(req: Request, userId: number): Promise<boolean> {
   const { data: user, error } = await supabaseAdmin
     .from("usuarios")
     .select("*")
@@ -33,7 +33,14 @@ export async function carregarUsuarioSessao(req: Request, userId: number) {
   req.session.userId = user.id;
   req.session.userRole = user.role;
   req.session.salaId = user.sala_id; // Coluna vem como sala_id no DB
-  return true;
+  
+  // Garantir saving persistente antes de retornar
+  return new Promise((resolve) => {
+    req.session.save((err: any) => {
+      if (err) console.error("Erro ao salvar sessão:", err);
+      resolve(true);
+    });
+  });
 }
 
 

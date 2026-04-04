@@ -30,7 +30,10 @@ const PORT = parseInt(process.env.PORT || "5000");
 // CORS - Configuração correta para produção
 // ============================================
 app.use(cors({
-  origin: true,  // Aceita qualquer domínio
+  origin: function (origin, callback) {
+    // Permite qualquer origem dinamicamente (Vercel, localhost, etc)
+    callback(null, origin || true);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie', 'X-Requested-With'],
@@ -71,17 +74,20 @@ app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 // ============================================
 // SESSÃO - Configuração correta para Render
 // ============================================
+const isProduction = process.env.NODE_ENV === "production";
+app.set("trust proxy", 1); // Importante para proxies HTTPS como Render
+
 const MemoryStore = MemoryStoreFactory(session);
 app.use(session({
   store: new MemoryStore({ checkPeriod: 86400000 }),
   secret: process.env.SESSION_SECRET || 'organize_plus_secret',
   resave: false,
-  saveUninitialized: true,  // Criar sessão mesmo sem login
+  saveUninitialized: false, // Melhor para não criar sessões vazias à toa
   cookie: {
-    secure: false,  // IMPORTANTE: false para HTTP (Render usa HTTPS mas o proxy pode interferir)
+    secure: isProduction, // IMPORTANTE: true em produção para cookies Cross-Site
     httpOnly: true,
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
-    sameSite: 'lax',
+    sameSite: isProduction ? 'none' : 'lax', // 'none' para Cross-Site (Vercel -> Render)
   }
 }));
 
