@@ -52,22 +52,20 @@ app.use((req, res, next) => {
 // Arquivos estáticos
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-// Configuração de sessão (MemoryStore para Serverless sem Postgres nativo)
+// Configuração de sessão (MemoryStore para Serverless)
 const MemoryStore = MemoryStoreFactory(session);
-app.use(
-  session({
-    store: new MemoryStore({ checkPeriod: 86400000 }), // Limpa sessões expiradas a cada 24h
-    secret: process.env.SESSION_SECRET || "organize_plus_secret_fallback",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
-    },
-  })
-);
+app.use(session({
+  store: new MemoryStore({ checkPeriod: 86400000 }),  // ← CORRIGIDO: usar MemoryStore, não MemoryStoreSession
+  secret: process.env.SESSION_SECRET || 'organize_plus_secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    sameSite: 'lax',
+  }
+}));
 
 // Rotas
 app.use("/api/auth", authRoutes);
@@ -111,7 +109,6 @@ if (process.env.NODE_ENV === "production") {
   app.use(express.static(staticPath));
   
   app.get("*", (req, res) => {
-    // Evitar loop no client dist
     res.sendFile(path.join(staticPath, "index.html"));
   });
   console.log(`📁 Servindo React App de: ${staticPath}`);
