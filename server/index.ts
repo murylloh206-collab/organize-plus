@@ -30,12 +30,15 @@ const PORT = parseInt(process.env.PORT || "5000");
 // CORS - Configuração correta para produção
 // ============================================
 const corsOptions = {
-  origin: process.env.NODE_ENV === "production"
-      ? ["https://organize-plus.onrender.com"]
-      : ["http://localhost:5173", "http://localhost:5174"],
+  origin: [
+    'https://organize-plus.vercel.app',
+    'https://organize-plus-git-master-murylloh206-collabs-projects.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:5174'
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie'],
 };
 
 app.use(cors(corsOptions));
