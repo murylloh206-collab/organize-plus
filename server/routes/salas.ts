@@ -44,7 +44,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST /api/salas - criar nova sala
+// POST /api/salas - criar nova sala (APENAS UMA VEZ!)
 router.post("/", async (req, res) => {
   try {
     if (!req.session?.userId || req.session.userRole !== "admin") {
@@ -75,6 +75,12 @@ router.post("/", async (req, res) => {
       metaValor: parseFloat(metaValor) || 0,
       senha: senha
     });
+
+    // 🔧 ATUALIZAR O USUÁRIO NO BANCO COM O sala_id
+    await supabaseAdmin
+      .from("usuarios")
+      .update({ sala_id: sala.id })
+      .eq("id", req.session.userId);
 
     req.session.salaId = sala.id;
     req.session.chaveValidada = false;
