@@ -33,12 +33,13 @@ const corsOptions = {
   origin: [
     'https://organize-plus.vercel.app',
     'https://organize-plus-git-master-murylloh206-collabs-projects.vercel.app',
+    'https://organize-plus-6g576fx23-murylloh206-collabs-projects.vercel.app',
     'http://localhost:5173',
     'http://localhost:5174'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie', 'X-Requested-With'],
 };
 
 app.use(cors(corsOptions));
