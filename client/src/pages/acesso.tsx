@@ -84,6 +84,11 @@ export default function AcessoPage() {
   navigate("/aluno/dashboard");
       } else {
   await registerComissao.mutateAsync({ nome, email, senha, celular });
+  
+  // 🔧 FORÇAR LOGIN APÓS CADASTRO
+  const user = await login.mutateAsync({ email, senha });
+  console.log("[CADASTRO] Usuário logado:", user);
+  
   window.location.href = "/admin/create-sala";
 }
     } catch (err: any) {
