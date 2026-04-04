@@ -83,9 +83,9 @@ export default function AcessoPage() {
   console.log("[CADASTRO] Redirecionando para /aluno/dashboard");
   navigate("/aluno/dashboard");
       } else {
-        await registerComissao.mutateAsync({ nome, email, senha, celular });
-        navigate("/admin/create-sala");
-      }
+  await registerComissao.mutateAsync({ nome, email, senha, celular });
+  window.location.href = "/admin/create-sala";
+}
     } catch (err: any) {
       setError(err.message || "Erro ao processar");
     } finally {
