@@ -1,5 +1,6 @@
 import express from "express";
 import session from "express-session";
+import createMemoryStore from "memorystore";
 import cors from "cors";
 import { config } from "dotenv";
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -7,6 +8,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 config();
 
 const app = express();
+
+const MemoryStore = createMemoryStore(session);
 
 // Middlewares
 app.use(cors({
@@ -18,16 +21,19 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Sessão (usando MemoryStore)
+// Sessão (usando MemoryStore configurado para Vercel)
 app.use(session({
-  secret: process.env.SESSION_SECRET || 'organize_plus_secret',
+  secret: process.env.SESSION_SECRET || 'organize_plus_backend_secret',
   resave: false,
   saveUninitialized: true,
+  store: new MemoryStore({
+    checkPeriod: 86400000 // limpa entradas expiradas a cada 24h (otimização para evitar memory leak)
+  }),
   cookie: {
     secure: process.env.NODE_ENV === "production",
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
+    sameSite: process.env.NODE_ENV === "production" ? 'none' : 'lax', // Ajuste para funcionar mesmo em cross-site se necessário
   }
 }));
 
