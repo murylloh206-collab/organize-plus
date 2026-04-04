@@ -26,19 +26,37 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = parseInt(process.env.PORT || "5000");
 
-// Middlewares
+// ============================================
+// CORS - Configuração correta para produção
+// ============================================
 const corsOptions = {
   origin: process.env.NODE_ENV === "production"
-      ? process.env.FRONTEND_URL || "https://organize-plus.onrender.com"
-      : ["http://localhost:5173", "http://localhost:5174", "http://192.168.1.40:5173"],
+      ? ["https://organize-plus.onrender.com"]
+      : ["http://localhost:5173", "http://localhost:5174"],
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie', 'Set-Cookie', 'X-Requested-With'],
 };
 
 app.use(cors(corsOptions));
+
+// ============================================
+// Middlewares básicos
+// ============================================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ============================================
+// Middleware para garantir credenciais
+// ============================================
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+
+// ============================================
 // Logging de requisições
+// ============================================
 app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
@@ -49,25 +67,31 @@ app.use((req, res, next) => {
   next();
 });
 
+// ============================================
 // Arquivos estáticos
+// ============================================
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-// Configuração de sessão (MemoryStore para Serverless)
+// ============================================
+// SESSÃO - Configuração correta para Render
+// ============================================
 const MemoryStore = MemoryStoreFactory(session);
 app.use(session({
-  store: new MemoryStore({ checkPeriod: 86400000 }),  // ← CORRIGIDO: usar MemoryStore, não MemoryStoreSession
+  store: new MemoryStore({ checkPeriod: 86400000 }),
   secret: process.env.SESSION_SECRET || 'organize_plus_secret',
   resave: false,
-  saveUninitialized: false,
+  saveUninitialized: true,  // Criar sessão mesmo sem login
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: false,  // IMPORTANTE: false para HTTP (Render usa HTTPS mas o proxy pode interferir)
     httpOnly: true,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dias
     sameSite: 'lax',
   }
 }));
 
-// Rotas
+// ============================================
+// ROTAS DA API
+// ============================================
 app.use("/api/auth", authRoutes);
 app.use("/api/alunos", alunosRoutes);
 app.use("/api/rifas", rifasRoutes);
@@ -82,16 +106,19 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/ranking", rankingRoutes);
 app.use("/api/notificacoes", notificacoesRoutes);
 
-// Health check
+// ============================================
+// HEALTH CHECK E DEBUG
+// ============================================
 app.get("/api/health", (_, res) => res.json({ status: "ok", timestamp: new Date().toISOString() }));
 
-// Debug REST api
 app.get("/api/debug/session", (req, res) => {
   res.json({
+    sessionId: req.sessionID,
     userId: req.session?.userId,
     userRole: req.session?.userRole,
     salaId: req.session?.salaId,
     hasSession: !!req.session,
+    cookies: req.headers.cookie || "nenhum cookie"
   });
 });
 
@@ -103,17 +130,24 @@ app.get("/api/debug", (req, res) => {
   });
 });
 
-// Servir frontend no modo produção
+// ============================================
+// SERVER FRONTEND (produção)
+// ============================================
 if (process.env.NODE_ENV === "production") {
   const staticPath = path.join(__dirname, "../client/dist");
   app.use(express.static(staticPath));
   
   app.get("*", (req, res) => {
+    // Evitar API routes
+    if (req.path.startsWith("/api/")) return;
     res.sendFile(path.join(staticPath, "index.html"));
   });
   console.log(`📁 Servindo React App de: ${staticPath}`);
 }
 
+// ============================================
+// INICIAR SERVIDOR
+// ============================================
 app.listen(PORT, () => {
   console.log(`\n🚀 Organize+ API rodando em http://localhost:${PORT}`);
   console.log(`   Ambiente: ${process.env.NODE_ENV || "development"}\n`);
