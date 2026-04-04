@@ -137,13 +137,26 @@ app.get("/api/debug", (req, res) => {
 // ============================================
 if (process.env.NODE_ENV === "production") {
   const staticPath = path.join(__dirname, "../client/dist");
+  
+  // Primeiro, servir arquivos estáticos (JS, CSS, imagens)
   app.use(express.static(staticPath));
   
+  // Depois, para rotas que não são API, servir o index.html
   app.get("*", (req, res) => {
-    // Evitar API routes
-    if (req.path.startsWith("/api/")) return;
+    // Verificar se a requisição é para a API
+    if (req.path.startsWith("/api/")) {
+      return;
+    }
+    
+    // Verificar se é um arquivo estático (com extensão)
+    if (req.path.match(/\.(js|css|png|jpg|jpeg|svg|ico|json|webmanifest)$/)) {
+      return res.status(404).send("Arquivo não encontrado");
+    }
+    
+    // Servir o index.html para todas as outras rotas (React Router)
     res.sendFile(path.join(staticPath, "index.html"));
   });
+  
   console.log(`📁 Servindo React App de: ${staticPath}`);
 }
 
