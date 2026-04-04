@@ -75,8 +75,13 @@ export default function AcessoPage() {
         const user = await login.mutateAsync({ email, senha });
         navigate(user.role === "admin" ? "/admin/dashboard" : "/aluno/dashboard");
       } else if (tipo === "aluno") {
-        await registerAluno.mutateAsync({ nome, email, senha, celular, turmaId, senhaTurma });
-        navigate("/aluno/dashboard");
+  console.log("[CADASTRO] Tentando cadastrar aluno...");
+  const result = await registerAluno.mutateAsync({ 
+    nome, email, senha, celular, turmaId, senhaTurma 
+  });
+  console.log("[CADASTRO] Resultado:", result);
+  console.log("[CADASTRO] Redirecionando para /aluno/dashboard");
+  navigate("/aluno/dashboard");
       } else {
         await registerComissao.mutateAsync({ nome, email, senha, celular });
         navigate("/admin/create-sala");
