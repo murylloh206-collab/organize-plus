@@ -44,7 +44,41 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST /api/salas - criar nova sala (APENAS UMA VEZ!)
+// PATCH /api/salas/:id - ATUALIZAR sala (nome, metaValor, senha)
+router.patch("/:id", async (req, res) => {
+  try {
+    if (!req.session?.userId || req.session.userRole !== "admin") {
+      return res.status(401).json({ message: "Não autorizado" });
+    }
+
+    const id = parseInt(req.params.id);
+    const { nome, metaValor, senha } = req.body;
+
+    const updateData: any = {};
+    if (nome !== undefined) updateData.nome = nome;
+    if (metaValor !== undefined) updateData.meta_valor = metaValor.toString();
+    if (senha !== undefined) updateData.senha = senha;
+
+    const { data, error } = await supabaseAdmin
+      .from("salas")
+      .update(updateData)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[PATCH /salas] Erro:", error);
+      return res.status(500).json({ message: "Erro ao atualizar sala" });
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error("[PATCH /salas] Erro:", error);
+    res.status(500).json({ message: "Erro interno" });
+  }
+});
+
+// POST /api/salas - criar nova sala
 router.post("/", async (req, res) => {
   try {
     if (!req.session?.userId || req.session.userRole !== "admin") {
@@ -76,7 +110,7 @@ router.post("/", async (req, res) => {
       senha: senha
     });
 
-    // 🔧 ATUALIZAR O USUÁRIO NO BANCO COM O sala_id
+    // ATUALIZAR O USUÁRIO NO BANCO COM O sala_id
     await supabaseAdmin
       .from("usuarios")
       .update({ sala_id: sala.id })
